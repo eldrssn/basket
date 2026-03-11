@@ -1,20 +1,36 @@
-import { GameState } from '../model/types';
+'use client';
+
+import { Droplets, Scissors, Blend } from 'lucide-react';
+import { useGameStore } from '../model/useGameStore';
+import type { BoosterType } from '../model/types';
+import { BOOSTER_CONFIGS } from '../config/boosters';
 import styles from './GameHUD.module.scss';
-import { RefreshCw, Zap, Droplets, Grid, Scissors, Plus } from 'lucide-react';
 
 interface GameHUDProps {
-  gameState: GameState;
-  onBoosterClick: (type: any) => void;
+  onBoosterClick: (type: BoosterType) => void;
 }
 
-export default function GameHUD({ gameState, onBoosterClick }: GameHUDProps) {
-  const { score, movesLeft, harvestProgress, harvestGoal, boosters } = gameState;
+const BOOSTER_ICONS: Record<BoosterType, React.ReactNode> = {
+  watering: <Droplets size={24} />,
+  skewer: <Scissors size={24} />,
+  blender: <Blend size={24} />,
+};
+
+const BOOSTER_ORDER: BoosterType[] = ['watering', 'skewer', 'blender'];
+
+export default function GameHUD({ onBoosterClick }: GameHUDProps) {
+  const { score, movesLeft, harvestProgress, harvestGoal, boosters, status, activeBooster } =
+    useGameStore();
+
+  const progressPct = harvestGoal > 0 ? Math.min(100, (harvestProgress / harvestGoal) * 100) : 0;
+  const isLowMoves = movesLeft <= 3 && movesLeft > 0;
 
   return (
     <>
+      {/* ── Верхняя панель ── */}
       <div className={styles.topPanel}>
         <div className={styles.stats}>
-          <div className={styles.stat}>
+          <div className={`${styles.stat} ${isLowMoves ? styles.movesWarning : ''}`}>
             <span className={styles.icon}>🌿</span>
             <span className={styles.value}>{movesLeft}</span>
           </div>
@@ -23,35 +39,35 @@ export default function GameHUD({ gameState, onBoosterClick }: GameHUDProps) {
             <span className={styles.value}>{score}</span>
           </div>
         </div>
-        
+
         <div className={styles.harvestBar}>
           <div className={styles.progressContainer}>
-             <div 
-               className={styles.progressBar} 
-               style={{ width: `${Math.min(100, (harvestProgress / harvestGoal) * 100)}%` }}
-             />
+            <div className={styles.progressBar} style={{ width: `${progressPct}%` }} />
           </div>
-          <span className={styles.progressText}>{Math.floor((harvestProgress / harvestGoal) * 100)}%</span>
+          <span className={styles.progressText}>{Math.floor(progressPct)}%</span>
         </div>
       </div>
 
+      {/* ── Нижняя панель: 3 бустера ── */}
       <div className={styles.bottomPanel}>
-        <button className={styles.boosterBtn} onClick={() => onBoosterClick('blender')}>
-          <RefreshCw size={24} />
-          <span className={styles.badge}>{boosters.blender}</span>
-        </button>
-        <button className={styles.boosterBtn} onClick={() => onBoosterClick('skewer')}>
-          <Zap size={24} />
-          <span className={styles.badge}>{boosters.skewer}</span>
-        </button>
-        <button className={styles.boosterBtn} onClick={() => onBoosterClick('watering')}>
-          <Droplets size={24} />
-          <span className={styles.badge}>{boosters.watering}</span>
-        </button>
-        <button className={styles.boosterBtn} onClick={() => onBoosterClick('rake')}>
-          <Grid size={24} />
-          <span className={styles.badge}>{boosters.rake}</span>
-        </button>
+        {BOOSTER_ORDER.map((type) => {
+          const count = boosters[type];
+          const isActive = status === 'booster_mode' && activeBooster.type === type;
+          const isDisabled = count <= 0 || (status !== 'playing' && !isActive);
+
+          return (
+            <button
+              key={type}
+              className={`${styles.boosterBtn} ${isActive ? styles.boosterActive : ''} ${isDisabled ? styles.boosterDisabled : ''}`}
+              onClick={() => !isDisabled && onBoosterClick(type)}
+              title={BOOSTER_CONFIGS[type].label}
+              disabled={isDisabled}
+            >
+              {BOOSTER_ICONS[type]}
+              {count > 0 && <span className={styles.badge}>{count}</span>}
+            </button>
+          );
+        })}
       </div>
     </>
   );

@@ -1,107 +1,335 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { LEVELS, generateLevel, LevelConfig } from '../../../features/basket-game/config/levels';
+import { ITEM_CONFIGS, ALL_ITEM_TYPES } from '../../../features/basket-game/config/items';
+import { useGameEngine } from '../../../features/basket-game/model/useGameEngine';
+import { useMatchLogic } from '../../../features/basket-game/model/useMatchLogic';
+import { useGameStore } from '../../../features/basket-game/model/useGameStore';
+import GameCanvas from '../../../features/basket-game/ui/GameCanvas';
+import GameHUD from '../../../features/basket-game/ui/GameHUD';
+import type { ItemType, NetState, StoneSize, BoosterType } from '../../../features/basket-game/model/types';
 
 export default function LevelEditor() {
-  const [selectedLevelId, setSelectedLevelId] = useState(1);
-  const [levelConfig, setLevelConfig] = useState<LevelConfig>(LEVELS[0]);
+  const [selectedId, setSelectedId] = useState(1);
+  const [config, setConfig] = useState<LevelConfig>(() => LEVELS[0]);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [attempts, setAttempts] = useState(100);
 
-  const handleLevelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = parseInt(e.target.value);
-    setSelectedLevelId(id);
-    const config = LEVELS.find(l => l.id === id);
-    if (config) setLevelConfig(config);
-  };
+  const { itemsRef, initGame, destroyChain, activateBoosterMode, cancelBooster, applyBooster } =
+    useGameEngine(config);
 
-  const handleGenerate = () => {
-    const newConfig = generateLevel(selectedLevelId);
-    setLevelConfig(newConfig);
-  };
+  const { status, activeBooster } = useGameStore();
+  const { chainLineRef, handlers } = useMatchLogic(itemsRef, destroyChain);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setPreviewKey((k) => k + 1);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [config]);
+
+  useEffect(() => {
+    const t = setTimeout(initGame, 80);
+    return () => clearTimeout(t);
+  }, [previewKey, initGame]);
+
+  const handleLevelChange = useCallback((id: number) => {
+    setSelectedId(id);
+    setConfig(LEVELS.find((l) => l.id === id) ?? LEVELS[0]);
+  }, []);
+
+  const handleAutoGenerate = useCallback(() => {
+    setConfig(generateLevel(selectedId));
+  }, [selectedId]);
+
+  const handleExport = useCallback(() => {
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `level_${config.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [config]);
+
+  const handleImport = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target?.result as string) as LevelConfig;
+          setConfig(parsed);
+        } catch {
+          alert('Неверный формат JSON');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, []);
+
+  const handleBoosterClick = useCallback(
+    (type: BoosterType) => {
+      if (status === 'booster_mode' && activeBooster.type === type) {
+        cancelBooster();
+      } else {
+        activateBoosterMode(type);
+      }
+    },
+    [status, activeBooster, activateBoosterMode, cancelBooster],
+  );
+
+  const handleCanvasDown = useCallback(
+    (x: number, y: number) => {
+      if (status === 'booster_mode' && activeBooster.type && activeBooster.type !== 'blender') {
+        for (const item of itemsRef.current.values()) {
+          const dx = x - item.body.position.x;
+          const dy = y - item.body.position.y;
+          const r = item.body.circleRadius ?? 0;
+          if (dx * dx + dy * dy <= r * r) {
+            applyBooster(activeBooster.type, item.id);
+            return;
+          }
+        }
+        cancelBooster();
+        return;
+      }
+      handlers.handlePointerDown(x, y);
+    },
+    [status, activeBooster, itemsRef, applyBooster, cancelBooster, handlers],
+  );
+
+  const toggleType = useCallback((type: ItemType) => {
+    setConfig((prev) => {
+      const has = prev.availableTypes.includes(type);
+      const next = has ? prev.availableTypes.filter((t) => t !== type) : [...prev.availableTypes, type];
+      if (next.length === 0) return prev;
+      return { ...prev, availableTypes: next, spawnWeights: Object.fromEntries(next.map((t) => [t, 1])) };
+    });
+  }, []);
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Left Panel - Config */}
-      <div className="w-1/3 p-4 bg-white shadow-lg overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">Level Editor</h2>
-        
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Select Level</label>
-          <div className="flex gap-2">
-            <select 
-              value={selectedLevelId} 
-              onChange={handleLevelChange}
-              className="flex-1 p-2 border rounded"
+    <div className="flex h-screen bg-gray-100" style={{ minWidth: 1024 }}>
+      {/* ══ ЛЕВАЯ ПАНЕЛЬ ══ */}
+      <div className="w-[420px] flex-shrink-0 bg-white shadow-lg flex flex-col">
+        <div className="p-4 border-b border-gray-200">
+          <h2 className="text-lg font-bold text-green-700 mb-3">Редактор уровней</h2>
+
+          <div className="flex gap-2 mb-2">
+            <select
+              value={selectedId}
+              onChange={(e) => handleLevelChange(parseInt(e.target.value))}
+              className="flex-1 p-2 border border-gray-300 rounded-lg text-sm"
             >
-              {LEVELS.map(l => (
-                <option key={l.id} value={l.id}>{l.name}</option>
+              {LEVELS.map((l) => (
+                <option key={l.id} value={l.id}>{l.name} ({l.zone})</option>
               ))}
             </select>
-            <button 
-              onClick={handleGenerate}
-              className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              ⚡
-            </button>
+            <button onClick={handleAutoGenerate} title="Авто-генерация"
+              className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">⚡</button>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleExport}
+              className="flex-1 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-xs">📥 Экспорт</button>
+            <button onClick={handleImport}
+              className="flex-1 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-xs">📤 Импорт</button>
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+          {/* Попытки */}
           <div>
-            <label className="block text-sm font-medium">Moves Limit: {levelConfig.movesLimit}</label>
-            <input 
-              type="range" 
-              min="5" 
-              max="50" 
-              value={levelConfig.movesLimit} 
-              onChange={(e) => setLevelConfig({...levelConfig, movesLimit: parseInt(e.target.value)})}
-              className="w-full"
-            />
+            <div className="text-xs font-semibold text-gray-600 mb-1">Попытки (тест)</div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setAttempts((a) => Math.max(1, a - 1))}
+                className="w-7 h-7 bg-gray-100 rounded font-bold text-sm hover:bg-gray-200">−</button>
+              <input type="number" value={attempts} min={1} max={999}
+                onChange={(e) => setAttempts(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-16 text-center border border-gray-300 rounded p-1 text-sm" />
+              <button onClick={() => setAttempts((a) => Math.min(999, a + 1))}
+                className="w-7 h-7 bg-gray-100 rounded font-bold text-sm hover:bg-gray-200">+</button>
+            </div>
           </div>
 
+          {/* Ходы */}
           <div>
-            <label className="block text-sm font-medium">Spawn Interval (ms): {levelConfig.spawnInterval}</label>
-            <input 
-              type="range" 
-              min="400" 
-              max="2000" 
-              value={levelConfig.spawnInterval} 
-              onChange={(e) => setLevelConfig({...levelConfig, spawnInterval: parseInt(e.target.value)})}
-              className="w-full"
-            />
+            <div className="text-xs font-semibold text-gray-600 mb-1">Ходы: <b>{config.movesLimit}</b></div>
+            <input type="range" min={5} max={50} value={config.movesLimit}
+              onChange={(e) => setConfig((p) => ({ ...p, movesLimit: parseInt(e.target.value) }))}
+              className="w-full" />
           </div>
-          
-           <div>
-            <label className="block text-sm font-medium">Golden Chance: {(levelConfig.goldenChance * 100).toFixed(0)}%</label>
-            <input 
-              type="range" 
-              min="0" 
-              max="100" 
-              value={levelConfig.goldenChance * 100} 
-              onChange={(e) => setLevelConfig({...levelConfig, goldenChance: parseInt(e.target.value) / 100})}
-              className="w-full"
-            />
-          </div>
-        </div>
 
-        <div className="mt-8 p-4 bg-gray-50 rounded">
-          <h3 className="font-bold mb-2">JSON Config</h3>
-          <pre className="text-xs overflow-auto h-40">
-            {JSON.stringify(levelConfig, null, 2)}
-          </pre>
+          {/* Цель */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-1">Цель (очков): <b>{config.harvestGoalPoints}</b></div>
+            <input type="range" min={50} max={2000} step={10} value={config.harvestGoalPoints}
+              onChange={(e) => setConfig((p) => ({ ...p, harvestGoalPoints: parseInt(e.target.value) }))}
+              className="w-full" />
+          </div>
+
+          {/* Шанс золотого */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-1">
+              Золотой: <b className="text-yellow-500">{Math.round(config.goldenSpawnChance * 100)}%</b>
+            </div>
+            <input type="range" min={0} max={40}
+              value={Math.round(config.goldenSpawnChance * 100)}
+              onChange={(e) => setConfig((p) => ({ ...p, goldenSpawnChance: parseInt(e.target.value) / 100 }))}
+              className="w-full" />
+          </div>
+
+          {/* Предметы */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-2">Предметы</div>
+            <div className="grid grid-cols-5 gap-1.5">
+              {ALL_ITEM_TYPES.map((type) => {
+                const cfg = ITEM_CONFIGS[type];
+                const active = config.availableTypes.includes(type);
+                return (
+                  <button key={type} onClick={() => toggleType(type)}
+                    className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg border text-center transition-all ${
+                      active ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 opacity-40'}`}>
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                      style={{ backgroundColor: cfg.color }}>{cfg.label.charAt(0)}</div>
+                    <span className="text-[8px] text-gray-400 leading-tight">{cfg.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Блокеры: Сеть */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-2">Блокеры</div>
+            <div className="space-y-2">
+              {/* Сеть */}
+              <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="text-xs font-medium">Сеть</div>
+                  <div className="text-[10px] text-gray-400">strong→weak→fragile→free</div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {config.netBlockers.length > 0 && (
+                    <>
+                      {(['strong', 'weak', 'fragile'] as NetState[]).map((s) => (
+                        <button key={s} onClick={() =>
+                          setConfig((p) => ({ ...p, netBlockers: [{ ...p.netBlockers[0], initialState: s }] }))}
+                          className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            config.netBlockers[0]?.initialState === s ? 'bg-amber-700 text-white' : 'bg-gray-200'}`}>
+                          {s[0].toUpperCase()}
+                        </button>
+                      ))}
+                      <input type="number" min={1} max={4} value={config.netBlockers[0]?.count ?? 1}
+                        onChange={(e) => setConfig((p) => ({ ...p, netBlockers: [{ ...p.netBlockers[0], count: parseInt(e.target.value) || 1 }] }))}
+                        className="w-8 text-center border border-gray-300 rounded text-xs p-0.5" />
+                    </>
+                  )}
+                  <input type="checkbox" checked={config.netBlockers.length > 0}
+                    onChange={(e) => setConfig((p) => ({
+                      ...p,
+                      netBlockers: e.target.checked ? [{ wrapsType: p.availableTypes[0], initialState: 'strong', count: 1 }] : [],
+                    }))} />
+                </div>
+              </div>
+
+              {/* Камень */}
+              <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="text-xs font-medium">Камень</div>
+                  <div className="text-[10px] text-gray-400">large=3, medium=2, small=1 хит</div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {config.stoneBlockers.length > 0 && (
+                    <>
+                      {(['large', 'medium', 'small'] as StoneSize[]).map((s) => (
+                        <button key={s} onClick={() =>
+                          setConfig((p) => ({ ...p, stoneBlockers: [{ ...p.stoneBlockers[0], size: s }] }))}
+                          className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            config.stoneBlockers[0]?.size === s ? 'bg-gray-700 text-white' : 'bg-gray-200'}`}>
+                          {s[0].toUpperCase()}
+                        </button>
+                      ))}
+                      <input type="number" min={1} max={3} value={config.stoneBlockers[0]?.count ?? 1}
+                        onChange={(e) => setConfig((p) => ({ ...p, stoneBlockers: [{ ...p.stoneBlockers[0], count: parseInt(e.target.value) || 1 }] }))}
+                        className="w-8 text-center border border-gray-300 rounded text-xs p-0.5" />
+                    </>
+                  )}
+                  <input type="checkbox" checked={config.stoneBlockers.length > 0}
+                    onChange={(e) => setConfig((p) => ({
+                      ...p,
+                      stoneBlockers: e.target.checked ? [{ size: 'small', count: 1 }] : [],
+                    }))} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Бустеры */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-2">Стартовые бустеры</div>
+            <div className="grid grid-cols-3 gap-2">
+              {(['watering', 'skewer', 'blender'] as BoosterType[]).map((type) => {
+                const labels: Record<BoosterType, string> = { watering: '💧 Лейка', skewer: '🗡 Шампур', blender: '🌀 Блендер' };
+                return (
+                  <div key={type} className="text-center">
+                    <div className="text-[10px] text-gray-400 mb-1">{labels[type]}</div>
+                    <input type="number" min={0} max={5} value={config.startBoosters[type] ?? 0}
+                      onChange={(e) => setConfig((p) => ({ ...p, startBoosters: { ...p.startBoosters, [type]: parseInt(e.target.value) || 0 } }))}
+                      className="w-full text-center border border-gray-300 rounded p-1 text-sm" />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* JSON */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-1">JSON</div>
+            <pre className="text-[10px] bg-gray-50 p-2 rounded border border-gray-200 overflow-auto max-h-40">
+              {JSON.stringify(config, null, 2)}
+            </pre>
+          </div>
         </div>
       </div>
 
-      {/* Right Panel - Preview */}
-      <div className="flex-1 flex justify-center items-center bg-gray-200 relative">
-        <div className="text-center">
-            <p className="text-gray-500 mb-4">Preview Area (Placeholder)</p>
-            {/* Here we would mount GameCanvas with current config */}
-            <div className="w-[360px] h-[640px] bg-white border-2 border-gray-300 relative shadow-xl rounded-lg overflow-hidden">
-                <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                    Game Preview
+      {/* ══ ПРАВАЯ ПАНЕЛЬ: ПРЕВЬЮ ══ */}
+      <div className="flex-1 flex flex-col items-center justify-center bg-gray-200 p-6 gap-3">
+        <div className="text-sm text-gray-500 font-medium">
+          Живое превью — {config.name} · {config.zone}
+        </div>
+        <div className="relative flex-1 w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl border border-gray-300">
+          <GameCanvas
+            itemsRef={itemsRef}
+            chainLineRef={chainLineRef}
+            onPointerDown={handleCanvasDown}
+            onPointerMove={handlers.handlePointerMove}
+            onPointerUp={handlers.handlePointerUp}
+          />
+          <GameHUD onBoosterClick={handleBoosterClick} />
+
+          {(status === 'win' || status === 'lose') && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-40">
+              <div className="bg-white rounded-xl p-6 text-center shadow-xl">
+                <div className="text-2xl font-bold mb-3">
+                  {status === 'win' ? '🌿 Победа!' : '😔 Проигрыш'}
                 </div>
+                <button onClick={() => setPreviewKey((k) => k + 1)}
+                  className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 text-sm">
+                  Перезапустить
+                </button>
+              </div>
             </div>
+          )}
         </div>
       </div>
     </div>

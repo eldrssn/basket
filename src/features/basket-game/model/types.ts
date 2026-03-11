@@ -1,53 +1,80 @@
-import Matter from 'matter-js';
-import { VegetableType } from '../config/vegetables';
+import type { Body } from 'matter-js';
 
-export type GameStatus =
-  | 'idle' // ещё не начата
-  | 'playing' // идёт игра
-  | 'paused' // пауза
-  | 'win' // победа
-  | 'lose_moves' // закончились ходы
-  | 'lose_overflow'; // овощи вышли за линию
+// ─── ПРЕДМЕТЫ ───────────────────────────────────────────────────────
 
-export type BlockerType = 'none' | 'ice' | 'stone';
+export type ItemType =
+  | 'tomato'
+  | 'carrot'
+  | 'eggplant'
+  | 'pepper'
+  | 'beet'
+  | 'cucumber'
+  | 'apple'
+  | 'orange'
+  | 'strawberry'
+  | 'blueberry';
 
-export interface VegetableBody {
+export type GoldenItemType = `golden_${ItemType}`;
+export type FieldItemType = ItemType | GoldenItemType;
+
+// ─── БЛОКЕРЫ ────────────────────────────────────────────────────────
+
+export type NetState = 'strong' | 'weak' | 'fragile';
+export type StoneSize = 'large' | 'medium' | 'small';
+
+// ─── ФИЗИЧЕСКИЕ ТЕЛА ────────────────────────────────────────────────
+
+export interface GameItem {
   id: string;
-  matterBody: Matter.Body;
-  type: VegetableType;
-  blockerState: BlockerType; // none = обычный, ice = заморожен, stone = камень
-  isSelected: boolean;
-  isFrozen: boolean; // заморожен льдом
+  body: Body;
+  type: FieldItemType;
+  netState: NetState | null;
+  stoneSize: StoneSize | null;
+  stoneHitsLeft: number;
   isGolden: boolean;
-  frozenTurnsLeft: number; // сколько матчей рядом нужно для размораживания
+  isSelected: boolean;
 }
 
-export interface ChainNode {
-  vegetableId: string;
-  position: { x: number; y: number };
-}
+// ─── БУСТЕРЫ ────────────────────────────────────────────────────────
+
+export type BoosterType = 'watering' | 'skewer' | 'blender';
 
 export interface BoosterInventory {
-  blender: number; // Блендер
-  skewer: number; // Шампур
-  watering: number; // Лейка
-  rake: number; // Грабли
-  secateur: number; // Секатор (второй шанс)
-  extraMoves: number; // +5 ходов (второй шанс)
+  watering: number;
+  skewer: number;
+  blender: number;
 }
 
-export type BoosterType = keyof BoosterInventory;
+export type ActiveBoosterState =
+  | { type: null }
+  | { type: 'watering'; targetId: string | null }
+  | { type: 'skewer'; targetId: string | null }
+  | { type: 'blender'; targetId: string | null };
+
+// ─── ИГРОВОЙ СТЕЙТ ──────────────────────────────────────────────────
+
+export type GameStatus =
+  | 'idle'
+  | 'playing'
+  | 'booster_mode'
+  | 'win'
+  | 'lose';
 
 export interface GameState {
   status: GameStatus;
+  levelId: number;
   score: number;
   movesLeft: number;
   harvestProgress: number; // 0..100
-  harvestGoal: number; // цель: сколько % нужно набрать
-  currentChain: ChainNode[];
+  harvestGoal: number;     // target points for 100% (from LevelConfig.harvestGoalPoints)
+  currentChain: string[];  // ids of items in current chain
+  activeBooster: ActiveBoosterState;
   boosters: BoosterInventory;
-  seedPackets: number; // пакетики семян для мета-игры
 }
+
+// ─── ЧАСТИЦЫ ────────────────────────────────────────────────────────
+
+export type ParticleType = 'chunk' | 'juice' | 'star';
 
 export interface EffectParticle {
   id: string;
@@ -58,7 +85,7 @@ export interface EffectParticle {
   color: string;
   size: number;
   alpha: number;
-  type: 'juice' | 'chunk' | 'star' | 'sparkle';
+  type: ParticleType;
   lifetime: number;
   age: number;
 }

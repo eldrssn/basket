@@ -142,18 +142,36 @@ export function useGameEngine(levelConfig: LevelConfig) {
     particlesRef.current = [];
 
     // Create Basket
-    const basketWidth = width - 40;
+    const basketWidth = width; // Full width
     const basketHeight = 400; // Increased height
     // Position the center such that the bottom is near the bottom of the canvas
-    const basketY = height - basketHeight / 2 - 10;
+    const basketY = height / 2; // Center vertically for the basket structure logic (walls are relative to this)
+    // Actually, createBasketBodies expects (cx, cy) where cy is the center of the vertical span of walls.
+    // The bottom wall is at cy + height/2.
+    // We want bottom wall to be at height - 10.
+    // So cy + height/2 = height - 10 => cy = height - 10 - height/2
+    const physicsBasketY = height - 10 - basketHeight / 2;
 
     const basket = createBasketBodies(
-      width / 2,
-      basketY,
+      width / 2, // Center X
+      physicsBasketY,
       basketWidth,
       basketHeight,
     );
     Matter.World.add(engine.world, basket);
+
+    // Add invisible floor to prevent falling through if fast physics happens
+    const ground = Matter.Bodies.rectangle(
+      width / 2,
+      height + 50,
+      width * 2,
+      100,
+      {
+        isStatic: true,
+        label: 'ground',
+      },
+    );
+    Matter.World.add(engine.world, ground);
 
     setGameState((prev) => ({ ...prev, status: 'playing' }));
     lastSpawnTimeRef.current = Date.now();

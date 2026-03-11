@@ -1,89 +1,92 @@
-import { useState, useRef, useCallback } from 'react';
-import { VegetableBody } from './types';
+'use client';
+
+import { useRef, useCallback } from 'react';
+import type { GameItem } from './types';
 import { canAddToChain } from '../lib/matchUtils';
 
 export function useMatchLogic(
-  vegetables: Map<string, VegetableBody>,
-  onChainComplete: (chain: VegetableBody[]) => void,
+  itemsRef: React.MutableRefObject<Map<string, GameItem>>,
+  onChainComplete: (chainIds: string[]) => void,
 ) {
-  const [chain, setChain] = useState<VegetableBody[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
+  const chainRef = useRef<GameItem[]>([]);
+  const isDraggingRef = useRef(false);
   const chainLineRef = useRef<{ x: number; y: number }[]>([]);
 
-  const hitTestVegetable = useCallback(
-    (
-      vegetables: Map<string, VegetableBody>,
-      x: number,
-      y: number,
-    ): VegetableBody | null => {
-      for (const veg of vegetables.values()) {
-        const { position, circleRadius } = veg.matterBody;
+  const hitTest = useCallback(
+    (x: number, y: number): GameItem | null => {
+      for (const item of itemsRef.current.values()) {
+        const { position, circleRadius } = item.body;
         const dx = x - position.x;
         const dy = y - position.y;
         if (dx * dx + dy * dy <= (circleRadius ?? 0) * (circleRadius ?? 0)) {
-          return veg;
+          return item;
         }
       }
       return null;
     },
-    [],
+    [itemsRef],
   );
 
   const handlePointerDown = useCallback(
-    (canvasX: number, canvasY: number) => {
-      const hit = hitTestVegetable(vegetables, canvasX, canvasY);
+    (x: number, y: number) => {
+      const hit = hitTest(x, y);
       if (hit && canAddToChain([], hit)) {
-        setIsDragging(true);
-        setChain([hit]);
-        chainLineRef.current = [
-          { x: hit.matterBody.position.x, y: hit.matterBody.position.y },
-        ];
+        isDraggingRef.current = true;
+        hit.isSelected = true;
+        chainRef.current = [hit];
+        chainLineRef.current = [{ x: hit.body.position.x, y: hit.body.position.y }];
       }
     },
-    [vegetables, hitTestVegetable],
+    [hitTest],
   );
 
   const handlePointerMove = useCallback(
-    (canvasX: number, canvasY: number) => {
-      if (!isDragging || chain.length === 0) return;
+    (x: number, y: number) => {
+      if (!isDraggingRef.current || chainRef.current.length === 0) return;
 
-      const hit = hitTestVegetable(vegetables, canvasX, canvasY);
-      if (hit && canAddToChain(chain, hit)) {
-        setChain((prev) => [...prev, hit]);
+      const chain = chainRef.current;
+      const hit = hitTest(x, y);
+      if (!hit) return;
+
+      // Добавить в цепочку
+      if (canAddToChain(chain, hit)) {
+        hit.isSelected = true;
+        chainRef.current = [...chain, hit];
         chainLineRef.current = [
           ...chainLineRef.current,
-          {
-            x: hit.matterBody.position.x,
-            y: hit.matterBody.position.y,
-          },
+          { x: hit.body.position.x, y: hit.body.position.y },
         ];
+        return;
       }
 
-      // Отмена последнего (drag назад)
-      if (chain.length >= 2) {
-        const secondLast = chain[chain.length - 2];
-        const hitId = hitTestVegetable(vegetables, canvasX, canvasY)?.id;
-        if (hitId === secondLast.id) {
-          setChain((prev) => prev.slice(0, -1));
-          chainLineRef.current = chainLineRef.current.slice(0, -1);
-        }
+      // Отмена последнего шага — drag назад к предыдущему
+      if (chain.length >= 2 && hit.id === chain[chain.length - 2].id) {
+        const removed = chain[chain.length - 1];
+        removed.isSelected = false;
+        chainRef.current = chain.slice(0, -1);
+        chainLineRef.current = chainLineRef.current.slice(0, -1);
       }
     },
-    [isDragging, chain, vegetables, hitTestVegetable],
+    [hitTest],
   );
 
   const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
+    isDraggingRef.current = false;
+    const chain = chainRef.current;
+
     if (chain.length >= 3) {
-      onChainComplete(chain);
+      onChainComplete(chain.map((item) => item.id));
     }
-    setChain([]);
+
+    for (const item of chain) {
+      item.isSelected = false;
+    }
+    chainRef.current = [];
     chainLineRef.current = [];
-  }, [chain, onChainComplete]);
+  }, [onChainComplete]);
 
   return {
-    chain,
-    isDragging,
+    chainRef,
     chainLineRef,
     handlers: { handlePointerDown, handlePointerMove, handlePointerUp },
   };

@@ -1,97 +1,119 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameEngine } from '@/features/basket-game/model/useGameEngine';
 import { useMatchLogic } from '@/features/basket-game/model/useMatchLogic';
+import { useGameStore } from '@/features/basket-game/model/useGameStore';
 import GameCanvas from '@/features/basket-game/ui/GameCanvas';
 import GameHUD from '@/features/basket-game/ui/GameHUD';
+import ModalWin from '@/widgets/modals/ui/ModalWin';
+import ModalLose from '@/widgets/modals/ui/ModalLose';
+import ModalBoosterHint from '@/widgets/modals/ui/ModalBoosterHint';
+import ModalBoosterSelect from '@/widgets/modals/ui/ModalBoosterSelect';
 import { LEVELS } from '@/features/basket-game/config/levels';
-import styles from './page.module.scss';
+import type { BoosterType, ItemType } from '@/features/basket-game/model/types';
 
 export default function GamePage() {
+  const router = useRouter();
   const [levelId, setLevelId] = useState(1);
-  const currentLevel = LEVELS.find((l) => l.id === levelId) || LEVELS[0];
+  const currentLevel = LEVELS.find((l) => l.id === levelId) ?? LEVELS[0];
 
   const {
-    canvasRef, // Note: canvasRef from useGameEngine is for sizing/physics, but GameCanvas has its own ref? 
-    // Actually useGameEngine needs the canvas dimensions. 
-    // In my useGameEngine implementation, it uses canvasRef.current to get width/height.
-    // So GameCanvas should forward its ref? 
-    // Or simpler: GameCanvas renders the canvas and passes the ref to parent, which passes to useGameEngine.
-    // But GameCanvas uses the ref for drawing context.
-    // Let's make GameCanvas forwardRef or just expose it.
-    // Actually, useGameEngine just needs width/height.
-    // I can pass width/height to useGameEngine initGame.
-    gameState,
-    vegetablesRef,
-    particlesRef,
+    itemsRef,
     initGame,
     destroyChain,
-    activateBooster,
+    activateBoosterMode,
+    cancelBooster,
+    applyBooster,
   } = useGameEngine(currentLevel);
 
-  const { handlers, chainLineRef } = useMatchLogic(
-    vegetablesRef.current, // Map is mutable, passing ref.current is fine for initial, but useMatchLogic needs live map?
-    // useMatchLogic uses `vegetables` in callbacks. If I pass `vegetablesRef.current` (the Map object), it works as long as the Map instance doesn't change.
-    // useGameEngine clears map but doesn't replace the Map instance?
-    // In useGameEngine: `vegetablesRef.current = new Map()`? No, `vegetablesRef.current.clear()`.
-    // So the Map instance is stable.
-    destroyChain
+  const { status, activeBooster } = useGameStore();
+  const { chainLineRef, handlers } = useMatchLogic(itemsRef, destroyChain);
+
+  useEffect(() => {
+    const t = setTimeout(initGame, 50);
+    return () => clearTimeout(t);
+  }, [levelId, initGame]);
+
+  const handleBoosterClick = useCallback(
+    (type: BoosterType) => {
+      if (status === 'booster_mode' && activeBooster.type === type) {
+        cancelBooster();
+      } else {
+        activateBoosterMode(type);
+      }
+    },
+    [status, activeBooster, activateBoosterMode, cancelBooster],
   );
 
-  // Initialize game on mount
-  useEffect(() => {
-    // We need to wait for canvas to be mounted?
-    // useGameEngine.initGame checks canvasRef.current.
-    // So we need to pass the canvas ref from GameCanvas to useGameEngine.
-    // But GameCanvas has its own ref.
-    // Let's modify GameCanvas to accept a ref or use callback ref.
-    // Or just start initGame with fixed dimensions for now.
-    
-    // Actually, useGameEngine uses canvasRef just for width/height.
-    // I can pass a mock or wait.
-    
-    // Let's just run initGame after a small delay or use a ref callback.
-    const timer = setTimeout(() => {
-        initGame();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [initGame, levelId]);
+  const handleCanvasPointerDown = useCallback(
+    (x: number, y: number) => {
+      if (status === 'booster_mode' && activeBooster.type) {
+        if (activeBooster.type === 'blender') return; // обрабатывается через ModalBoosterSelect
+
+        for (const item of itemsRef.current.values()) {
+          const dx = x - item.body.position.x;
+          const dy = y - item.body.position.y;
+          const r = item.body.circleRadius ?? 0;
+          if (dx * dx + dy * dy <= r * r) {
+            applyBooster(activeBooster.type, item.id);
+            return;
+          }
+        }
+        cancelBooster(); // тап мимо поля
+        return;
+      }
+      handlers.handlePointerDown(x, y);
+    },
+    [status, activeBooster, itemsRef, applyBooster, cancelBooster, handlers],
+  );
+
+  const handleNextLevel = useCallback(() => {
+    setLevelId((id) => Math.min(60, id + 1));
+  }, []);
+
+  const handleReplay = useCallback(() => { initGame(); }, [initGame]);
+
+  const handleBlenderSelect = useCallback(
+    (type: ItemType) => { applyBooster('blender', type); },
+    [applyBooster],
+  );
 
   return (
-    <div className={styles.gameContainer}>
-      <GameHUD gameState={gameState} onBoosterClick={activateBooster} />
-      
+    <div style={{ position: 'relative', width: '100%', height: '100dvh', overflow: 'hidden', background: '#14532d' }}>
       <GameCanvas
-        canvasRef={canvasRef}
-        vegetablesRef={vegetablesRef}
-        particlesRef={particlesRef}
+        itemsRef={itemsRef}
         chainLineRef={chainLineRef}
-        width={360} // Fixed width for now, or dynamic
-        height={640}
-        onPointerDown={handlers.handlePointerDown}
+        onPointerDown={handleCanvasPointerDown}
         onPointerMove={handlers.handlePointerMove}
         onPointerUp={handlers.handlePointerUp}
       />
-      
-      {/* Overlay logic for modals would go here */}
-      {gameState.status === 'win' && (
-        <div className={styles.overlay}>
-          <div className={styles.modal}>
-            <h2>Victory!</h2>
-            <p>Score: {gameState.score}</p>
-            <button onClick={() => setLevelId(levelId + 1)}>Next Level</button>
-          </div>
-        </div>
+
+      <GameHUD onBoosterClick={handleBoosterClick} />
+
+      {status === 'booster_mode' && activeBooster.type && activeBooster.type !== 'blender' && (
+        <ModalBoosterHint boosterType={activeBooster.type} onCancel={cancelBooster} />
       )}
-      
-       {gameState.status === 'lose_moves' && (
-        <div className={styles.overlay}>
-          <div className={styles.modal}>
-            <h2>Out of Moves!</h2>
-            <button onClick={() => window.location.reload()}>Retry</button>
-          </div>
-        </div>
+
+      {status === 'booster_mode' && activeBooster.type === 'blender' && (
+        <ModalBoosterSelect
+          availableTypes={currentLevel.availableTypes}
+          onSelect={handleBlenderSelect}
+          onCancel={cancelBooster}
+        />
+      )}
+
+      {status === 'win' && (
+        <ModalWin
+          levelName={currentLevel.name}
+          onNextLevel={handleNextLevel}
+          onReplay={handleReplay}
+        />
+      )}
+
+      {status === 'lose' && (
+        <ModalLose onReplay={handleReplay} onBack={() => router.push('/')} />
       )}
     </div>
   );

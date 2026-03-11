@@ -1,57 +1,46 @@
-import { VegetableBody } from '../model/types';
-import { VEGETABLE_CONFIGS, VegetableType } from '../config/vegetables';
+import type { GameItem } from '../model/types';
 
-const MAX_CHAIN_DISTANCE = 90; // px — максимальное расстояние между соседями
+// Порог: дополнительные px сверх суммы радиусов для признания соседства
+const NEIGHBOR_THRESHOLD_EXTRA_PX = 35;
 
-export function isNeighbor(
-  bodyA: VegetableBody,
-  bodyB: VegetableBody,
-): boolean {
-  const dx = bodyA.matterBody.position.x - bodyB.matterBody.position.x;
-  const dy = bodyA.matterBody.position.y - bodyB.matterBody.position.y;
+export function isNeighbor(a: GameItem, b: GameItem): boolean {
+  const dx = a.body.position.x - b.body.position.x;
+  const dy = a.body.position.y - b.body.position.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
   const threshold =
-    (bodyA.matterBody.circleRadius ?? 0) +
-    (bodyB.matterBody.circleRadius ?? 0) +
-    30;
-  return dist <= Math.max(threshold, MAX_CHAIN_DISTANCE);
+    (a.body.circleRadius ?? 0) +
+    (b.body.circleRadius ?? 0) +
+    NEIGHBOR_THRESHOLD_EXTRA_PX;
+  return dist <= threshold;
 }
 
-export function isSameType(a: VegetableBody, b: VegetableBody): boolean {
-  // Золотые считаются своим base-типом для матча
-  const baseType = (t: VegetableType): string =>
-    t.startsWith('golden_') ? t.replace('golden_', '') : t;
-  return baseType(a.type) === baseType(b.type);
+// Золотой томат матчится с обычными томатами и наоборот
+export function isSameBaseType(a: GameItem, b: GameItem): boolean {
+  const baseA = a.type.startsWith('golden_') ? a.type.slice(7) : a.type;
+  const baseB = b.type.startsWith('golden_') ? b.type.slice(7) : b.type;
+  return baseA === baseB;
 }
 
-export function canAddToChain(
-  chain: VegetableBody[],
-  candidate: VegetableBody,
-): boolean {
-  if (candidate.isFrozen || candidate.blockerState === 'stone') return false;
+export function canAddToChain(chain: GameItem[], candidate: GameItem): boolean {
+  // Предмет в сети не включается в цепочку
+  if (candidate.netState !== null) return false;
+  // Камень не участвует в цепочке
+  if (candidate.stoneSize !== null) return false;
+
   if (chain.length === 0) return true;
-  if (chain.some((v) => v.id === candidate.id)) return false;
+  if (chain.some((item) => item.id === candidate.id)) return false;
 
   const last = chain[chain.length - 1];
-  return isNeighbor(last, candidate) && isSameType(last, candidate);
+  return isNeighbor(last, candidate) && isSameBaseType(last, candidate);
 }
 
-export function calculateChainScore(chain: VegetableBody[]): number {
-  if (chain.length < 3) return 0;
-
-  const basePoints = 3;
-  const baseScore = chain.length * basePoints;
-
-  // Multipliers
-  let multiplier = 1;
-
-  if (chain.length >= 5) {
-    multiplier *= 1.5;
-  }
-
-  if (chain.some((v) => v.isGolden)) {
-    multiplier *= 2;
-  }
-
-  return Math.floor(baseScore * multiplier);
+export function getNeighborsOfItem(
+  targetId: string,
+  allItems: Map<string, GameItem>,
+): GameItem[] {
+  const target = allItems.get(targetId);
+  if (!target) return [];
+  return Array.from(allItems.values()).filter(
+    (item) => item.id !== targetId && isNeighbor(target, item),
+  );
 }

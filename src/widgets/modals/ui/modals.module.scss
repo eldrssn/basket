@@ -1,0 +1,269 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 32px;
+  margin: 0 24px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 320px;
+  width: 100%;
+}
+
+.emoji {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.titleWin {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #15803d;
+  margin: 0 0 4px;
+}
+
+.titleLose {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #dc2626;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin: 0 0 16px;
+}
+
+.scoreBox {
+  background: #f0fdf4;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.scoreValue {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.scoreLabel {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btnPrimary {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: #16a34a;
+  color: #fff;
+  transition: background 0.15s, transform 0.1s;
+
+  &:hover { background: #15803d; }
+  &:active { transform: scale(0.97); }
+}
+
+.btnPrimaryRed {
+  @extend .btnPrimary;
+  background: #ef4444;
+  &:hover { background: #dc2626; }
+}
+
+.btnSecondary {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: #f3f4f6;
+  color: #4b5563;
+  transition: background 0.15s, transform 0.1s;
+
+  &:hover { background: #e5e7eb; }
+  &:active { transform: scale(0.97); }
+}
+
+// ── Прогресс-бар (ModalLose) ──────────────────────────────────────────
+.progressSection {
+  margin-bottom: 24px;
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+
+.progressTrack {
+  height: 12px;
+  background: #f3f4f6;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: #f87171;
+  border-radius: 999px;
+  transition: width 0.4s ease-out;
+}
+
+.progressNote {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 8px;
+}
+
+// ── ModalBoosterHint ─────────────────────────────────────────────────
+.hintOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.hintPanel {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid #e5e7eb;
+  padding: 20px 20px calc(env(safe-area-inset-bottom) + 16px);
+  pointer-events: auto;
+}
+
+.hintHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.hintEmoji {
+  font-size: 2.25rem;
+  line-height: 1;
+}
+
+.hintLabel {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #1f2937;
+}
+
+.hintDesc {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.hintNote {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+// ── ModalBoosterSelect ───────────────────────────────────────────────
+.selectOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 25;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.selectCard {
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px;
+  margin: 0 24px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 320px;
+  width: 100%;
+}
+
+.selectTitle {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #1f2937;
+  margin: 8px 0 4px;
+}
+
+.selectSubtitle {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin: 0 0 20px;
+}
+
+.itemGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.itemBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.1s, transform 0.1s;
+
+  &:hover { background: #f9fafb; }
+  &:active { transform: scale(0.88); }
+}
+
+.itemCircle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.itemName {
+  font-size: 9px;
+  color: #9ca3af;
+  line-height: 1.2;
+  text-align: center;
+}
