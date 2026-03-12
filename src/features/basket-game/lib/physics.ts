@@ -1,4 +1,9 @@
 import Matter from 'matter-js';
+import {
+  BASKET_RIM_HEIGHT,
+  BASKET_WALL_THICKNESS,
+  getBasketOutlinePoints,
+} from './basket';
 
 export interface PhysicsConfig {
   canvasWidth: number;
@@ -16,21 +21,12 @@ export function initPhysicsEngine(config: PhysicsConfig) {
   return { engine };
 }
 
-/**
- * Creates a parabolic basket from multiple angled segments.
- * The parabola runs from (cx - width/2, cy - height/2) at the top
- * down to (cx, cy + height/2) at the bottom vertex,
- * and back up to (cx + width/2, cy - height/2).
- */
 export function createBasketBodies(
-  cx: number,
-  cy: number,
-  width: number,
-  height: number,
+  _cx: number,
+  _cy: number,
+  _width: number,
+  _height: number,
 ): Matter.Body[] {
-  const wallThickness = 10;
-  const segments = 12; // segments per side (left + right)
-
   const wallOpts: Matter.IBodyDefinition = {
     isStatic: true,
     friction: 0.8,
@@ -39,30 +35,9 @@ export function createBasketBodies(
   };
 
   const bodies: Matter.Body[] = [];
+  const { leftWall, bottomArc, rightWall } = getBasketOutlinePoints();
 
-  // Parabola: y(x) = a*(x-cx)^2 + bottomY
-  // At x = cx ± width/2, y = topY = cy - height/2
-  // At x = cx, y = bottomY = cy + height/2
-  // a = (topY - bottomY) / (width/2)^2
-  const halfW = width / 2;
-  const topY = cy - height / 2;
-  const bottomY = cy + height / 2;
-  const a = (topY - bottomY) / (halfW * halfW);
-
-  // Generate points along the parabola from left to right
-  const totalPoints = segments * 2 + 1;
-  const points: { x: number; y: number }[] = [];
-  for (let i = 0; i <= totalPoints; i++) {
-    const x = cx - halfW + (i / totalPoints) * width;
-    const dx = x - cx;
-    const y = a * dx * dx + bottomY;
-    points.push({ x, y });
-  }
-
-  // Create a rectangle segment between each pair of consecutive points
-  for (let i = 0; i < points.length - 1; i++) {
-    const p1 = points[i];
-    const p2 = points[i + 1];
+  const createSegment = (p1: { x: number; y: number }, p2: { x: number; y: number }) => {
     const midX = (p1.x + p2.x) / 2;
     const midY = (p1.y + p2.y) / 2;
     const dx = p2.x - p1.x;
@@ -70,34 +45,44 @@ export function createBasketBodies(
     const len = Math.sqrt(dx * dx + dy * dy);
     const angle = Math.atan2(dy, dx);
 
-    const seg = Matter.Bodies.rectangle(midX, midY, len + 2, wallThickness, {
-      ...wallOpts,
-      angle,
-    });
-    bodies.push(seg);
-  }
+    bodies.push(
+      Matter.Bodies.rectangle(midX, midY, len + 2, BASKET_WALL_THICKNESS, {
+        ...wallOpts,
+        angle,
+      }),
+    );
+  };
 
-  // Left wall extending above the parabola top
-  const leftTopX = cx - halfW;
-  const leftWall = Matter.Bodies.rectangle(
-    leftTopX,
-    topY - height * 0.3,
-    wallThickness,
-    height * 0.6,
-    wallOpts,
-  );
-  bodies.push(leftWall);
+  const createPathSegments = (points: { x: number; y: number }[]) => {
+    for (let i = 0; i < points.length - 1; i++) {
+      createSegment(points[i], points[i + 1]);
+    }
+  };
 
-  // Right wall extending above the parabola top
-  const rightTopX = cx + halfW;
-  const rightWall = Matter.Bodies.rectangle(
-    rightTopX,
-    topY - height * 0.3,
-    wallThickness,
-    height * 0.6,
-    wallOpts,
+  createPathSegments(leftWall);
+  createPathSegments(bottomArc);
+  createPathSegments(rightWall);
+
+  const leftTop = leftWall[0];
+  const rightTop = rightWall[0];
+  bodies.push(
+    Matter.Bodies.rectangle(
+      leftTop.x,
+      leftTop.y - BASKET_RIM_HEIGHT / 2,
+      BASKET_WALL_THICKNESS,
+      BASKET_RIM_HEIGHT,
+      wallOpts,
+    ),
   );
-  bodies.push(rightWall);
+  bodies.push(
+    Matter.Bodies.rectangle(
+      rightTop.x,
+      rightTop.y - BASKET_RIM_HEIGHT / 2,
+      BASKET_WALL_THICKNESS,
+      BASKET_RIM_HEIGHT,
+      wallOpts,
+    ),
+  );
 
   return bodies;
 }

@@ -4,13 +4,9 @@ import type { LevelConfig } from '../config/levels';
 import type { GameItem, FieldItemType, ItemType } from './types';
 import { ITEM_CONFIGS } from '../config/items';
 import { STONE_CONFIGS } from '../config/blockers';
-import { GAME_WIDTH } from '../config/constants';
+import { BASKET_TOP_Y, getBasketInnerBoundsAtY } from '../lib/basket';
 
-// Spawn zone: narrower than basket so items always fall inside the walls
-const BASKET_INNER_WIDTH = GAME_WIDTH - 20; // matches useGameEngine basketW
 const SPAWN_PADDING = 40; // extra inset from each wall
-const SPAWN_LEFT = (GAME_WIDTH - BASKET_INNER_WIDTH) / 2 + SPAWN_PADDING;
-const SPAWN_RIGHT = GAME_WIDTH - (GAME_WIDTH - BASKET_INNER_WIDTH) / 2 - SPAWN_PADDING;
 
 export function useSpawner(
   levelConfig: LevelConfig,
@@ -30,7 +26,9 @@ export function useSpawner(
       const fieldType: FieldItemType = isGolden ? `golden_${selectedType}` : selectedType;
 
       const cfg = ITEM_CONFIGS[selectedType];
-      const spawnX = x ?? SPAWN_LEFT + cfg.radius + Math.random() * (SPAWN_RIGHT - SPAWN_LEFT - cfg.radius * 2);
+      const spawnBounds = getBasketInnerBoundsAtY(BASKET_TOP_Y, SPAWN_PADDING + cfg.radius);
+      const spawnWidth = Math.max(0, spawnBounds.right - spawnBounds.left);
+      const spawnX = x ?? spawnBounds.left + Math.random() * spawnWidth;
       const spawnY = y ?? -cfg.radius - 10;
 
       const body = Matter.Bodies.circle(spawnX, spawnY, cfg.radius, {
@@ -66,7 +64,8 @@ export function useSpawner(
       const remaining = Math.max(0, levelConfig.totalItems - alreadyPlaced);
       for (let i = 0; i < remaining; i++) {
         const cfg = ITEM_CONFIGS[levelConfig.availableTypes[0]];
-        const x = SPAWN_LEFT + cfg.radius + Math.random() * (SPAWN_RIGHT - SPAWN_LEFT - cfg.radius * 2);
+        const spawnBounds = getBasketInnerBoundsAtY(BASKET_TOP_Y, SPAWN_PADDING + cfg.radius);
+        const x = spawnBounds.left + Math.random() * Math.max(0, spawnBounds.right - spawnBounds.left);
         const y = -10 - Math.random() * 300;
         spawnItem(x, y);
       }

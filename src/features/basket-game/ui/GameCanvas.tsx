@@ -8,6 +8,11 @@ import { getParticlePool } from '../lib/effectsCanvas';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/constants';
 import { useGameStore } from '../model/useGameStore';
 import type { ItemType } from '../model/types';
+import {
+  BASKET_RIM_HEIGHT,
+  BASKET_WALL_THICKNESS,
+  getBasketOutlinePoints,
+} from '../lib/basket';
 
 interface GameCanvasProps {
   itemsRef: React.MutableRefObject<Map<string, GameItem>>;
@@ -149,37 +154,36 @@ export default function GameCanvas({
 // ─── ФУНКЦИИ РЕНДЕРА ────────────────────────────────────────────────
 
 function renderBasket(ctx: CanvasRenderingContext2D) {
-  const basketW = GAME_WIDTH * 0.82;
-  const basketH = GAME_HEIGHT * 0.52;
-  const basketCX = GAME_WIDTH / 2;
-  const basketCY = GAME_HEIGHT * 0.62;
-  const wallT = 9;
-  const r = 50; // радиус скругления углов
-
-  const left = basketCX - basketW / 2;
-  const right = basketCX + basketW / 2;
-  const top = basketCY - basketH / 2;
-  const bottom = basketCY + basketH / 2 + wallT;
+  const { leftWall, bottomArc, rightWall } = getBasketOutlinePoints();
+  const leftTop = leftWall[0];
+  const leftBottom = leftWall[leftWall.length - 1];
+  const rightBottom = rightWall[rightWall.length - 1];
+  const rightTop = rightWall[0];
 
   ctx.save();
-  ctx.fillStyle = '#8D6E63';
+  ctx.strokeStyle = '#8D6E63';
+  ctx.lineWidth = BASKET_WALL_THICKNESS;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(61, 39, 35, 0.18)';
+  ctx.shadowBlur = 6;
 
-  // U-образная форма через path
   ctx.beginPath();
-  ctx.moveTo(left, top);
-  ctx.lineTo(left, bottom - r);
-  ctx.quadraticCurveTo(left, bottom, left + r, bottom);
-  ctx.lineTo(right - r, bottom);
-  ctx.quadraticCurveTo(right, bottom, right, bottom - r);
-  ctx.lineTo(right, top);
-  ctx.lineTo(right - wallT, top);
-  ctx.lineTo(right - wallT, bottom - r - wallT);
-  ctx.quadraticCurveTo(right - wallT, bottom - wallT, right - wallT - r, bottom - wallT);
-  ctx.lineTo(left + wallT + r, bottom - wallT);
-  ctx.quadraticCurveTo(left + wallT, bottom - wallT, left + wallT, bottom - r - wallT);
-  ctx.lineTo(left + wallT, top);
-  ctx.closePath();
-  ctx.fill();
+  ctx.moveTo(leftTop.x, leftTop.y - BASKET_RIM_HEIGHT);
+  ctx.lineTo(leftTop.x, leftTop.y);
+  for (let i = 1; i < leftWall.length; i++) {
+    ctx.lineTo(leftWall[i].x, leftWall[i].y);
+  }
+  ctx.lineTo(leftBottom.x, leftBottom.y);
+  for (let i = 1; i < bottomArc.length; i++) {
+    ctx.lineTo(bottomArc[i].x, bottomArc[i].y);
+  }
+  ctx.lineTo(rightBottom.x, rightBottom.y);
+  for (let i = rightWall.length - 2; i >= 0; i--) {
+    ctx.lineTo(rightWall[i].x, rightWall[i].y);
+  }
+  ctx.lineTo(rightTop.x, rightTop.y - BASKET_RIM_HEIGHT);
+  ctx.stroke();
 
   ctx.restore();
 }

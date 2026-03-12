@@ -11,6 +11,7 @@ import { useGameStore } from './useGameStore';
 import { useSpawner } from './useSpawner';
 import { useBoosterLogic } from './useBoosterLogic';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/constants';
+import { BASKET_BOTTOM_Y, BASKET_TOP_Y, getBasketInnerBoundsAtY } from '../lib/basket';
 
 export function useGameEngine(levelConfig: LevelConfig) {
   const itemsRef = useRef<Map<string, GameItem>>(new Map());
@@ -42,6 +43,19 @@ export function useGameEngine(levelConfig: LevelConfig) {
     rafRef.current = requestAnimationFrame(gameLoop);
   }, []);
 
+  const getRandomPointInBasket = useCallback((radius: number, minY: number, maxY: number) => {
+    const safeMinY = Math.max(BASKET_TOP_Y + radius, minY);
+    const safeMaxY = Math.min(BASKET_BOTTOM_Y - radius, maxY);
+    const y = safeMinY + Math.random() * Math.max(0, safeMaxY - safeMinY);
+    const bounds = getBasketInnerBoundsAtY(y, radius + 8);
+    const width = Math.max(0, bounds.right - bounds.left);
+
+    return {
+      x: bounds.left + (width > 0 ? Math.random() * width : 0),
+      y,
+    };
+  }, []);
+
   // ─── INIT ─────────────────────────────────────────────────────────────
   const initGame = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -56,10 +70,7 @@ export function useGameEngine(levelConfig: LevelConfig) {
     engineRef.current = engine;
 
     // Basket
-    const basketW = GAME_WIDTH - 20;
-    const basketH = GAME_HEIGHT * 0.75;
-    const basketCY = GAME_HEIGHT - basketH / 2;
-    const basket = createBasketBodies(GAME_WIDTH / 2, basketCY, basketW, basketH);
+    const basket = createBasketBodies(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT);
     Matter.World.add(engine.world, basket);
 
     // Ground below visible area
@@ -78,8 +89,13 @@ export function useGameEngine(levelConfig: LevelConfig) {
         : (preset.type as import('./types').ItemType);
       const cfg = ITEM_CONFIGS[baseType];
       for (let i = 0; i < preset.count; i++) {
-        const x = cfg.radius * 2 + Math.random() * (GAME_WIDTH - cfg.radius * 4);
-        const y = GAME_HEIGHT * 0.3 + Math.random() * GAME_HEIGHT * 0.2;
+        const point = getRandomPointInBasket(
+          cfg.radius,
+          GAME_HEIGHT * 0.34,
+          GAME_HEIGHT * 0.72,
+        );
+        const x = point.x;
+        const y = point.y;
         const body = Matter.Bodies.circle(x, y, cfg.radius, {
           restitution: cfg.restitution,
           friction: cfg.friction,
@@ -108,8 +124,13 @@ export function useGameEngine(levelConfig: LevelConfig) {
     for (const nb of levelConfig.netBlockers) {
       const cfg = ITEM_CONFIGS[nb.wrapsType];
       for (let i = 0; i < nb.count; i++) {
-        const x = cfg.radius * 2 + Math.random() * (GAME_WIDTH - cfg.radius * 4);
-        const y = GAME_HEIGHT * 0.4 + Math.random() * GAME_HEIGHT * 0.2;
+        const point = getRandomPointInBasket(
+          cfg.radius,
+          GAME_HEIGHT * 0.4,
+          GAME_HEIGHT * 0.75,
+        );
+        const x = point.x;
+        const y = point.y;
         const body = Matter.Bodies.circle(x, y, cfg.radius, {
           restitution: cfg.restitution,
           friction: cfg.friction,
@@ -137,8 +158,13 @@ export function useGameEngine(levelConfig: LevelConfig) {
     for (const sb of levelConfig.stoneBlockers) {
       const stoneCfg = STONE_CONFIGS[sb.size];
       for (let i = 0; i < sb.count; i++) {
-        const x = stoneCfg.radius + Math.random() * (GAME_WIDTH - stoneCfg.radius * 2);
-        const y = GAME_HEIGHT * 0.5 + Math.random() * GAME_HEIGHT * 0.2;
+        const point = getRandomPointInBasket(
+          stoneCfg.radius,
+          GAME_HEIGHT * 0.48,
+          GAME_HEIGHT * 0.78,
+        );
+        const x = point.x;
+        const y = point.y;
         spawnStone(sb.size, x, y);
         placedCount++;
       }
@@ -156,7 +182,7 @@ export function useGameEngine(levelConfig: LevelConfig) {
     useGameStore.getState().setStatus('playing');
 
     rafRef.current = requestAnimationFrame(gameLoop);
-  }, [levelConfig, gameLoop, spawnInitialItems, spawnStone]);
+  }, [getRandomPointInBasket, levelConfig, gameLoop, spawnInitialItems, spawnStone]);
 
   // ─── DESTROY CHAIN ────────────────────────────────────────────────────
   const destroyChain = useCallback(
