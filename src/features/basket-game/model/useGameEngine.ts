@@ -1,292 +1,231 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import Matter from 'matter-js';
-import { LevelConfig } from '../config/levels';
-import { GameState, VegetableBody, BoosterType, EffectParticle } from './types';
+import type { LevelConfig } from '../config/levels';
+import type { GameItem, GameStatus } from './types';
+import { ITEM_CONFIGS } from '../config/items';
+import { STONE_CONFIGS, NET_PROGRESSION } from '../config/blockers';
 import { initPhysicsEngine, createBasketBodies } from '../lib/physics';
-import { VEGETABLE_CONFIGS, VegetableType } from '../config/vegetables';
-import { calculateChainScore } from '../lib/matchUtils';
+import { calculateChainScore, calculateHarvestProgress } from '../lib/scoreCalc';
 import { spawnMatchEffect, updateParticles } from '../lib/effectsCanvas';
+import { useGameStore } from './useGameStore';
+import { useSpawner } from './useSpawner';
+import { useBoosterLogic } from './useBoosterLogic';
+
+export const GAME_WIDTH = 390;
+export const GAME_HEIGHT = 844;
 
 export function useGameEngine(levelConfig: LevelConfig) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const itemsRef = useRef<Map<string, GameItem>>(new Map());
   const engineRef = useRef<Matter.Engine | null>(null);
-  const runnerRef = useRef<Matter.Runner | null>(null);
-  const vegetablesRef = useRef<Map<string, VegetableBody>>(new Map());
-  const particlesRef = useRef<EffectParticle[]>([]);
-  const animFrameRef = useRef<number>(0);
-  const lastSpawnTimeRef = useRef<number>(0);
+  const rafRef = useRef<number>(0);
 
-  const [gameState, setGameState] = useState<GameState>({
-    status: 'idle',
-    score: 0,
-    movesLeft: levelConfig.movesLimit,
-    harvestProgress: 0,
-    harvestGoal: levelConfig.harvestGoal,
-    currentChain: [],
-    boosters: {
-      blender: 0,
-      skewer: 0,
-      watering: 0,
-      rake: 0,
-      secateur: 0,
-      extraMoves: 0,
-      ...levelConfig.startBoosters,
-    } as any, // Cast because Partial<BoosterInventory> vs BoosterInventory
-    seedPackets: 0,
-  });
-
-  // ─── SPAWN ───
-  const spawnVegetable = useCallback(() => {
-    if (!engineRef.current) return;
-
-    // Check max vegetables limit
-    if (vegetablesRef.current.size >= levelConfig.maxVegetables) return;
-
-    // Determine type based on weights
-    const rand = Math.random();
-    // Simple weighted random selection
-    const types = levelConfig.vegetableTypes;
-    // For now, just random pick
-    const type = types[Math.floor(Math.random() * types.length)];
-
-    // Check golden chance
-    const isGolden = Math.random() < levelConfig.goldenChance;
-    let finalType = type;
-    if (isGolden) {
-      const goldenName = `golden_${type}`;
-      // Check if specific golden config exists
-      if (VEGETABLE_CONFIGS[goldenName as VegetableType]) {
-        finalType = goldenName as VegetableType;
-      }
-    }
-
-    // Check if golden version exists, otherwise use base type
-    const config = VEGETABLE_CONFIGS[finalType];
-
-    const x = Math.random() * (config.radius * 2) + config.radius; // Simplified spawn X
-    // Actually should be within basket width
-    // Assuming basket is centered at canvasWidth / 2
-    // We need canvas dimensions.
-    // Let's assume standard mobile width for now or get from config.
-    const canvasWidth = canvasRef.current?.width || 360;
-    const spawnX = Math.random() * (canvasWidth - 100) + 50;
-
-    const body = Matter.Bodies.circle(spawnX, -50, config.radius, {
-      restitution: config.restitution,
-      friction: config.friction,
-      frictionAir: config.frictionAir,
-      mass: config.mass,
-      label: 'vegetable',
-    });
-
-    const vegBody: VegetableBody = {
-      id: body.id.toString(),
-      matterBody: body,
-      type: finalType,
-      blockerState: 'none',
-      isSelected: false,
-      isFrozen: false,
-      isGolden: isGolden,
-      frozenTurnsLeft: 0,
-    };
-
-    Matter.World.add(engineRef.current.world, body);
-    vegetablesRef.current.set(vegBody.id, vegBody);
-  }, [levelConfig]);
-
-  // ─── GAME LOOP ───
-  const gameLoop = useCallback(() => {
-    if (!engineRef.current || !canvasRef.current) return;
-
-    Matter.Engine.update(engineRef.current, 1000 / 60);
-
-    // Spawn logic
-    const now = Date.now();
-    // Logic changed: spawn until max is reached, then only spawn to replace
-    // Initial fill or refill
-    if (gameState.status === 'playing') {
-      if (vegetablesRef.current.size < levelConfig.maxVegetables) {
-        // If we are below max, spawn rapidly or immediately
-        // Let's keep a small interval to avoid physics explosion
-        if (now - lastSpawnTimeRef.current > 100) {
-          // Fast spawn for refill
-          spawnVegetable();
-          lastSpawnTimeRef.current = now;
-        }
-      }
-    }
-
-    // Update particles
-    particlesRef.current = updateParticles(particlesRef.current);
-
-    // Check overflow
-    // checkOverflowLine();
-
-    animFrameRef.current = requestAnimationFrame(gameLoop);
-  }, [gameState.status, levelConfig.spawnInterval, spawnVegetable]);
-
-  // ─── INITIALIZATION ───
-  const initGame = useCallback(() => {
-    if (!canvasRef.current) return;
-
-    const { width, height } = canvasRef.current;
-    const { engine, runner } = initPhysicsEngine({
-      canvasWidth: width,
-      canvasHeight: height,
-      gravity: 1.5,
-    });
-
-    engineRef.current = engine;
-    runnerRef.current = runner;
-    vegetablesRef.current.clear();
-    particlesRef.current = [];
-
-    // Create Basket
-    const basketWidth = width; // Full width
-    const basketHeight = 400; // Increased height
-    // Position the center such that the bottom is near the bottom of the canvas
-    const basketY = height / 2; // Center vertically for the basket structure logic (walls are relative to this)
-    // Actually, createBasketBodies expects (cx, cy) where cy is the center of the vertical span of walls.
-    // The bottom wall is at cy + height/2.
-    // We want bottom wall to be at height - 10.
-    // So cy + height/2 = height - 10 => cy = height - 10 - height/2
-    const physicsBasketY = height - 10 - basketHeight / 2;
-
-    const basket = createBasketBodies(
-      width / 2, // Center X
-      physicsBasketY,
-      basketWidth,
-      basketHeight,
-    );
-    Matter.World.add(engine.world, basket);
-
-    // Add invisible floor to prevent falling through if fast physics happens
-    const ground = Matter.Bodies.rectangle(
-      width / 2,
-      height + 50,
-      width * 2,
-      100,
-      {
-        isStatic: true,
-        label: 'ground',
-      },
-    );
-    Matter.World.add(engine.world, ground);
-
-    setGameState((prev) => ({ ...prev, status: 'playing' }));
-    lastSpawnTimeRef.current = Date.now();
-
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    animFrameRef.current = requestAnimationFrame(gameLoop);
-  }, [gameLoop]);
-
-  // ─── DESTROY CHAIN ───
-  const destroyChain = useCallback((chain: VegetableBody[]) => {
-    if (!engineRef.current) return;
-
-    const score = calculateChainScore(chain);
-
-    // Remove bodies
-    chain.forEach((v) => {
-      Matter.World.remove(engineRef.current!.world, v.matterBody);
-      vegetablesRef.current.delete(v.id);
-    });
-
-    // Spawn effects
-    particlesRef.current = spawnMatchEffect(particlesRef.current, chain);
-
-    setGameState((prev) => {
-      const newScore = prev.score + score;
-      const newMoves = prev.movesLeft - 1;
-      const progressGain = score; // Using score directly as progress
-      const newProgress = prev.harvestProgress + progressGain;
-
-      let status = prev.status;
-      if (newProgress >= prev.harvestGoal) status = 'win';
-      else if (newMoves <= 0) status = 'lose_moves';
-
-      return {
-        ...prev,
-        score: newScore,
-        movesLeft: newMoves,
-        harvestProgress: newProgress,
-        status,
-      };
-    });
-  }, []);
-
-  const activateBooster = useCallback(
-    (type: BoosterType, targetVegetableId?: string) => {
-      if (!engineRef.current) return;
-
-      // Check if booster is available
-      if (gameState.boosters[type] <= 0) return;
-
-      let success = false;
-
-      switch (type) {
-        case 'rake': {
-          // Apply random force to all vegetables
-          vegetablesRef.current.forEach((veg) => {
-            Matter.Body.applyForce(veg.matterBody, veg.matterBody.position, {
-              x: (Math.random() - 0.5) * 0.05,
-              y: -(Math.random() * 0.05),
-            });
-          });
-          success = true;
-          break;
-        }
-        case 'extraMoves': {
-          setGameState((prev) => ({ ...prev, movesLeft: prev.movesLeft + 5 }));
-          success = true;
-          break;
-        }
-        // Implement other boosters here
-      }
-
-      if (success) {
-        setGameState((prev) => ({
-          ...prev,
-          boosters: {
-            ...prev.boosters,
-            [type]: prev.boosters[type] - 1,
-          },
-        }));
-      }
-    },
-    [gameState.boosters],
+  const { spawnInitialItems, respawnAfterMatch, spawnStone } = useSpawner(
+    levelConfig,
+    engineRef,
+    itemsRef,
   );
 
-  const resetLevel = useCallback(() => {
-    setGameState({
-      status: 'idle',
-      score: 0,
-      movesLeft: levelConfig.movesLimit,
-      harvestProgress: 0,
-      harvestGoal: levelConfig.harvestGoal,
-      currentChain: [],
-      boosters: { ...levelConfig.startBoosters } as any,
-      seedPackets: 0,
+  const { activateBoosterMode, cancelBooster, applyBooster } = useBoosterLogic(
+    engineRef,
+    itemsRef,
+    respawnAfterMatch,
+  );
+
+  // ─── GAME LOOP ───────────────────────────────────────────────────────
+  // Only physics + particles. No continuous item spawning.
+  const gameLoop = useCallback(() => {
+    const { status } = useGameStore.getState();
+    if (status !== 'playing' && status !== 'booster_mode') return;
+    if (!engineRef.current) return;
+
+    Matter.Engine.update(engineRef.current, 1000 / 60);
+    updateParticles();
+
+    rafRef.current = requestAnimationFrame(gameLoop);
+  }, []);
+
+  // ─── INIT ─────────────────────────────────────────────────────────────
+  const initGame = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (engineRef.current) Matter.Engine.clear(engineRef.current);
+    itemsRef.current.clear();
+
+    const { engine } = initPhysicsEngine({
+      canvasWidth: GAME_WIDTH,
+      canvasHeight: GAME_HEIGHT,
+      gravity: 1.5,
     });
-    initGame();
-  }, [levelConfig, initGame]);
+    engineRef.current = engine;
+
+    // Basket
+    const basketW = GAME_WIDTH - 20;
+    const basketH = GAME_HEIGHT * 0.75;
+    const basketCY = GAME_HEIGHT - basketH / 2;
+    const basket = createBasketBodies(GAME_WIDTH / 2, basketCY, basketW, basketH);
+    Matter.World.add(engine.world, basket);
+
+    // Ground below visible area
+    const ground = Matter.Bodies.rectangle(GAME_WIDTH / 2, GAME_HEIGHT + 50, GAME_WIDTH * 2, 100, {
+      isStatic: true,
+      label: 'ground',
+    });
+    Matter.World.add(engine.world, ground);
+
+    let placedCount = 0;
+
+    // Preset items
+    for (const preset of levelConfig.presetItems) {
+      const baseType = preset.type.startsWith('golden_')
+        ? (preset.type.slice(7) as import('./types').ItemType)
+        : (preset.type as import('./types').ItemType);
+      const cfg = ITEM_CONFIGS[baseType];
+      for (let i = 0; i < preset.count; i++) {
+        const x = cfg.radius * 2 + Math.random() * (GAME_WIDTH - cfg.radius * 4);
+        const y = GAME_HEIGHT * 0.3 + Math.random() * GAME_HEIGHT * 0.2;
+        const body = Matter.Bodies.circle(x, y, cfg.radius, {
+          restitution: cfg.restitution,
+          friction: cfg.friction,
+          frictionAir: cfg.frictionAir,
+          mass: cfg.mass,
+          label: 'item',
+        });
+        const isGolden = preset.type.startsWith('golden_');
+        const item: GameItem = {
+          id: String(body.id),
+          body,
+          type: preset.type,
+          netState: null,
+          stoneSize: null,
+          stoneHitsLeft: 0,
+          isGolden,
+          isSelected: false,
+        };
+        Matter.World.add(engine.world, body);
+        itemsRef.current.set(item.id, item);
+        placedCount++;
+      }
+    }
+
+    // Net blockers
+    for (const nb of levelConfig.netBlockers) {
+      const cfg = ITEM_CONFIGS[nb.wrapsType];
+      for (let i = 0; i < nb.count; i++) {
+        const x = cfg.radius * 2 + Math.random() * (GAME_WIDTH - cfg.radius * 4);
+        const y = GAME_HEIGHT * 0.4 + Math.random() * GAME_HEIGHT * 0.2;
+        const body = Matter.Bodies.circle(x, y, cfg.radius, {
+          restitution: cfg.restitution,
+          friction: cfg.friction,
+          frictionAir: cfg.frictionAir,
+          mass: cfg.mass,
+          label: 'item',
+        });
+        const item: GameItem = {
+          id: String(body.id),
+          body,
+          type: nb.wrapsType,
+          netState: nb.initialState,
+          stoneSize: null,
+          stoneHitsLeft: 0,
+          isGolden: false,
+          isSelected: false,
+        };
+        Matter.World.add(engine.world, body);
+        itemsRef.current.set(item.id, item);
+        placedCount++;
+      }
+    }
+
+    // Stone blockers
+    for (const sb of levelConfig.stoneBlockers) {
+      const stoneCfg = STONE_CONFIGS[sb.size];
+      for (let i = 0; i < sb.count; i++) {
+        const x = stoneCfg.radius + Math.random() * (GAME_WIDTH - stoneCfg.radius * 2);
+        const y = GAME_HEIGHT * 0.5 + Math.random() * GAME_HEIGHT * 0.2;
+        spawnStone(sb.size, x, y);
+        placedCount++;
+      }
+    }
+
+    // Fill remaining slots with random items
+    spawnInitialItems(placedCount);
+
+    useGameStore.getState().resetGame({
+      levelId: levelConfig.id,
+      movesLimit: levelConfig.movesLimit,
+      harvestGoalPoints: levelConfig.harvestGoalPoints,
+      startBoosters: levelConfig.startBoosters,
+    });
+    useGameStore.getState().setStatus('playing');
+
+    rafRef.current = requestAnimationFrame(gameLoop);
+  }, [levelConfig, gameLoop, spawnInitialItems, spawnStone]);
+
+  // ─── DESTROY CHAIN ────────────────────────────────────────────────────
+  const destroyChain = useCallback(
+    (chain: GameItem[]) => {
+      if (!engineRef.current) return;
+
+      const store = useGameStore.getState();
+      const score = calculateChainScore(chain);
+      const progressPct = calculateHarvestProgress(score, store.harvestGoal);
+
+      // Remove chain items
+      for (const item of chain) {
+        Matter.World.remove(engineRef.current.world, item.body);
+        itemsRef.current.delete(item.id);
+      }
+
+      spawnMatchEffect(chain);
+
+      // Degrade nets and stones near chain
+      for (const chainItem of chain) {
+        const cr = chainItem.body.circleRadius ?? 0;
+        for (const mapItem of itemsRef.current.values()) {
+          const mr = mapItem.body.circleRadius ?? 0;
+          const dx = chainItem.body.position.x - mapItem.body.position.x;
+          const dy = chainItem.body.position.y - mapItem.body.position.y;
+          const inRange = Math.sqrt(dx * dx + dy * dy) <= cr + mr + 35;
+          if (!inRange) continue;
+
+          if (mapItem.netState !== null) {
+            mapItem.netState = NET_PROGRESSION[mapItem.netState];
+          }
+
+          if (mapItem.stoneSize !== null) {
+            mapItem.stoneHitsLeft -= 1;
+            if (mapItem.stoneHitsLeft <= 0) {
+              Matter.World.remove(engineRef.current!.world, mapItem.body);
+              itemsRef.current.delete(mapItem.id);
+            }
+          }
+        }
+      }
+
+      // Respawn exactly the number of removed items
+      respawnAfterMatch(chain.length);
+
+      useGameStore.getState().addScore(score);
+      useGameStore.getState().addProgress(progressPct);
+      useGameStore.getState().decrementMoves();
+      useGameStore.getState().setChain([]);
+
+      const next = useGameStore.getState();
+      const newStatus: GameStatus =
+        next.harvestProgress >= 100 ? 'win' : next.movesLeft <= 0 ? 'lose' : 'playing';
+      if (newStatus !== 'playing') {
+        useGameStore.getState().setStatus(newStatus);
+      }
+    },
+    [respawnAfterMatch],
+  );
 
   // Cleanup
   useEffect(() => {
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (engineRef.current) Matter.Engine.clear(engineRef.current);
     };
   }, []);
 
-  return {
-    canvasRef,
-    gameState,
-    vegetablesRef, // Need to expose this for hit testing in UI/hooks
-    particlesRef,
-    initGame,
-    destroyChain,
-    activateBooster,
-    resetLevel,
-  };
+  return { itemsRef, initGame, destroyChain, activateBoosterMode, cancelBooster, applyBooster };
 }

@@ -2,11 +2,11 @@
 
 import { useRef, useCallback } from 'react';
 import type { GameItem } from './types';
-import { canAddToChain } from '../lib/matchUtils';
+import { canAddToChain, wouldSelfIntersect } from '../lib/matchUtils';
 
 export function useMatchLogic(
   itemsRef: React.MutableRefObject<Map<string, GameItem>>,
-  onChainComplete: (chainIds: string[]) => void,
+  onChainComplete: (chain: GameItem[]) => void,
 ) {
   const chainRef = useRef<GameItem[]>([]);
   const isDraggingRef = useRef(false);
@@ -48,8 +48,8 @@ export function useMatchLogic(
       const hit = hitTest(x, y);
       if (!hit) return;
 
-      // Добавить в цепочку
-      if (canAddToChain(chain, hit)) {
+      // Добавить в цепочку (проверка пересечения лианы)
+      if (canAddToChain(chain, hit) && !wouldSelfIntersect(chain, hit)) {
         hit.isSelected = true;
         chainRef.current = [...chain, hit];
         chainLineRef.current = [
@@ -75,7 +75,7 @@ export function useMatchLogic(
     const chain = chainRef.current;
 
     if (chain.length >= 3) {
-      onChainComplete(chain.map((item) => item.id));
+      onChainComplete(chain);
     }
 
     for (const item of chain) {

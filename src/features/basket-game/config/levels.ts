@@ -41,6 +41,9 @@ export interface LevelConfig {
   // Ограничение: только ходы (не время)
   movesLimit: number;
 
+  // Общее количество предметов в корзинке
+  totalItems: number;
+
   // Предметы
   availableTypes: ItemType[];
   spawnWeights: Partial<Record<ItemType, number>>;
@@ -52,6 +55,9 @@ export interface LevelConfig {
   // Блокеры на старте
   netBlockers: NetBlockerConfig[];
   stoneBlockers: StoneBlockerConfig[];
+
+  // Вероятность спавна блокеров при досыпке (0..1)
+  blockerSpawnChance: number;
 
   // Бустеры
   availableBoosters: BoosterType[];
@@ -120,17 +126,21 @@ export function generateLevel(id: number): LevelConfig {
         }]
       : [];
 
+  const totalItems = isEasy ? 20 : isMedium ? 25 : 30;
+
   return {
     id,
     name: `Уровень ${id}`,
     harvestGoalPoints,
     movesLimit,
+    totalItems,
     availableTypes,
     spawnWeights: Object.fromEntries(availableTypes.map((t) => [t, 1])),
     goldenSpawnChance: isEasy ? 0.05 : isMedium ? 0.08 : 0.12,
     presetItems,
     netBlockers,
     stoneBlockers,
+    blockerSpawnChance: isEasy ? 0 : isMedium ? 0.05 : 0.1,
     availableBoosters: ['watering', 'skewer', 'blender'],
     startBoosters: isEasy && id <= 3 ? { watering: 1, skewer: 1 } : {},
     zone,
