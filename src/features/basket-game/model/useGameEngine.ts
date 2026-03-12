@@ -10,9 +10,7 @@ import { spawnMatchEffect, updateParticles } from '../lib/effectsCanvas';
 import { useGameStore } from './useGameStore';
 import { useSpawner } from './useSpawner';
 import { useBoosterLogic } from './useBoosterLogic';
-
-export const GAME_WIDTH = 390;
-export const GAME_HEIGHT = 844;
+import { GAME_WIDTH, GAME_HEIGHT } from '../config/constants';
 
 export function useGameEngine(levelConfig: LevelConfig) {
   const itemsRef = useRef<Map<string, GameItem>>(new Map());

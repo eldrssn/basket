@@ -5,7 +5,7 @@ import type { GameItem } from '../model/types';
 import { ITEM_CONFIGS, ITEM_LABELS } from '../config/items';
 import { NET_CONFIGS, STONE_CONFIGS } from '../config/blockers';
 import { getParticlePool } from '../lib/effectsCanvas';
-import { GAME_WIDTH, GAME_HEIGHT } from '../model/useGameEngine';
+import { GAME_WIDTH, GAME_HEIGHT } from '../config/constants';
 import { useGameStore } from '../model/useGameStore';
 import type { ItemType } from '../model/types';
 
@@ -153,8 +153,8 @@ function renderBasket(ctx: CanvasRenderingContext2D) {
   const basketH = GAME_HEIGHT * 0.52;
   const basketCX = GAME_WIDTH / 2;
   const basketCY = GAME_HEIGHT * 0.62;
-  const wallT = 18;
-  const r = 28; // радиус скругления углов
+  const wallT = 9;
+  const r = 50; // радиус скругления углов
 
   const left = basketCX - basketW / 2;
   const right = basketCX + basketW / 2;

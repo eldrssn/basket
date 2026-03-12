@@ -4,7 +4,13 @@ import type { LevelConfig } from '../config/levels';
 import type { GameItem, FieldItemType, ItemType } from './types';
 import { ITEM_CONFIGS } from '../config/items';
 import { STONE_CONFIGS } from '../config/blockers';
-import { GAME_WIDTH } from './useGameEngine';
+import { GAME_WIDTH } from '../config/constants';
+
+// Spawn zone: narrower than basket so items always fall inside the walls
+const BASKET_INNER_WIDTH = GAME_WIDTH - 20; // matches useGameEngine basketW
+const SPAWN_PADDING = 40; // extra inset from each wall
+const SPAWN_LEFT = (GAME_WIDTH - BASKET_INNER_WIDTH) / 2 + SPAWN_PADDING;
+const SPAWN_RIGHT = GAME_WIDTH - (GAME_WIDTH - BASKET_INNER_WIDTH) / 2 - SPAWN_PADDING;
 
 export function useSpawner(
   levelConfig: LevelConfig,
@@ -24,7 +30,7 @@ export function useSpawner(
       const fieldType: FieldItemType = isGolden ? `golden_${selectedType}` : selectedType;
 
       const cfg = ITEM_CONFIGS[selectedType];
-      const spawnX = x ?? cfg.radius + Math.random() * (GAME_WIDTH - cfg.radius * 2);
+      const spawnX = x ?? SPAWN_LEFT + cfg.radius + Math.random() * (SPAWN_RIGHT - SPAWN_LEFT - cfg.radius * 2);
       const spawnY = y ?? -cfg.radius - 10;
 
       const body = Matter.Bodies.circle(spawnX, spawnY, cfg.radius, {
@@ -60,8 +66,7 @@ export function useSpawner(
       const remaining = Math.max(0, levelConfig.totalItems - alreadyPlaced);
       for (let i = 0; i < remaining; i++) {
         const cfg = ITEM_CONFIGS[levelConfig.availableTypes[0]];
-        const x = cfg.radius + Math.random() * (GAME_WIDTH - cfg.radius * 2);
-        // Stagger Y so they don't all overlap: spread from -10 to -300
+        const x = SPAWN_LEFT + cfg.radius + Math.random() * (SPAWN_RIGHT - SPAWN_LEFT - cfg.radius * 2);
         const y = -10 - Math.random() * 300;
         spawnItem(x, y);
       }
