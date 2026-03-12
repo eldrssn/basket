@@ -8,7 +8,12 @@ import { useMatchLogic } from '../../../features/basket-game/model/useMatchLogic
 import { useGameStore } from '../../../features/basket-game/model/useGameStore';
 import GameCanvas from '../../../features/basket-game/ui/GameCanvas';
 import GameHUD from '../../../features/basket-game/ui/GameHUD';
+import ModalBoosterHint from '../../modals/ui/ModalBoosterHint';
+import ModalBoosterSelect from '../../modals/ui/ModalBoosterSelect';
 import type { ItemType, NetState, StoneSize, BoosterType } from '../../../features/basket-game/model/types';
+
+const NET_STATES: NetState[] = ['strong', 'weak', 'fragile'];
+const STONE_SIZES: StoneSize[] = ['large', 'medium', 'small'];
 
 export default function LevelEditor() {
   const [selectedId, setSelectedId] = useState(1);
@@ -109,6 +114,13 @@ export default function LevelEditor() {
     [status, activeBooster, itemsRef, applyBooster, cancelBooster, handlers],
   );
 
+  const handleBlenderSelect = useCallback(
+    (type: ItemType) => {
+      applyBooster('blender', type);
+    },
+    [applyBooster],
+  );
+
   const toggleType = useCallback((type: ItemType) => {
     setConfig((prev) => {
       const has = prev.availableTypes.includes(type);
@@ -116,6 +128,65 @@ export default function LevelEditor() {
       if (next.length === 0) return prev;
       return { ...prev, availableTypes: next, spawnWeights: Object.fromEntries(next.map((t) => [t, 1])) };
     });
+  }, []);
+
+  const setMovesLimit = useCallback((value: string) => {
+    const parsed = parseInt(value, 10);
+    setConfig((prev) => ({
+      ...prev,
+      movesLimit: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
+    }));
+  }, []);
+
+  const upsertNetBlocker = useCallback(
+    (state: NetState, updates: { count?: number; wrapsType?: ItemType }) => {
+      setConfig((prev) => {
+        const current = prev.netBlockers.find((blocker) => blocker.initialState === state);
+        const nextCount = Math.max(0, updates.count ?? current?.count ?? 0);
+        const nextWrapsType = updates.wrapsType ?? current?.wrapsType ?? prev.availableTypes[0];
+        const nextNetBlockers = prev.netBlockers.filter((blocker) => blocker.initialState !== state);
+
+        if (nextCount > 0) {
+          nextNetBlockers.push({
+            initialState: state,
+            wrapsType: nextWrapsType,
+            count: nextCount,
+          });
+        }
+
+        return { ...prev, netBlockers: nextNetBlockers };
+      });
+    },
+    [],
+  );
+
+  const toggleNetBlockers = useCallback((enabled: boolean) => {
+    setConfig((prev) => ({
+      ...prev,
+      netBlockers: enabled
+        ? [{ wrapsType: prev.availableTypes[0], initialState: 'strong', count: 1 }]
+        : [],
+    }));
+  }, []);
+
+  const upsertStoneBlocker = useCallback((size: StoneSize, count: number) => {
+    setConfig((prev) => {
+      const nextCount = Math.max(0, count);
+      const nextStoneBlockers = prev.stoneBlockers.filter((blocker) => blocker.size !== size);
+
+      if (nextCount > 0) {
+        nextStoneBlockers.push({ size, count: nextCount });
+      }
+
+      return { ...prev, stoneBlockers: nextStoneBlockers };
+    });
+  }, []);
+
+  const toggleStoneBlockers = useCallback((enabled: boolean) => {
+    setConfig((prev) => ({
+      ...prev,
+      stoneBlockers: enabled ? [{ size: 'small', count: 1 }] : [],
+    }));
   }, []);
 
   return (
@@ -164,9 +235,14 @@ export default function LevelEditor() {
           {/* Ходы */}
           <div>
             <div className="text-xs font-semibold text-gray-600 mb-1">Ходы: <b>{config.movesLimit}</b></div>
-            <input type="range" min={5} max={50} value={config.movesLimit}
-              onChange={(e) => setConfig((p) => ({ ...p, movesLimit: parseInt(e.target.value) }))}
-              className="w-full" />
+            <input
+              type="number"
+              min={0}
+              max={999}
+              value={config.movesLimit}
+              onChange={(e) => setMovesLimit(e.target.value)}
+              className="w-full border border-gray-300 rounded p-2 text-sm"
+            />
           </div>
 
           {/* Цель */}
@@ -186,6 +262,26 @@ export default function LevelEditor() {
               value={Math.round(config.goldenSpawnChance * 100)}
               onChange={(e) => setConfig((p) => ({ ...p, goldenSpawnChance: parseInt(e.target.value) / 100 }))}
               className="w-full" />
+          </div>
+
+          {/* Появление блокеров */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-1">
+              Появление блокеров при досыпке: <b>{config.blockerSpawnChance.toFixed(2)}</b>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(config.blockerSpawnChance * 100)}
+              onChange={(e) =>
+                setConfig((p) => ({
+                  ...p,
+                  blockerSpawnChance: parseInt(e.target.value, 10) / 100,
+                }))
+              }
+              className="w-full"
+            />
           </div>
 
           {/* Предметы */}
@@ -213,63 +309,95 @@ export default function LevelEditor() {
             <div className="text-xs font-semibold text-gray-600 mb-2">Блокеры</div>
             <div className="space-y-2">
               {/* Сеть */}
-              <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                <div>
-                  <div className="text-xs font-medium">Сеть</div>
-                  <div className="text-[10px] text-gray-400">strong→weak→fragile→free</div>
+              <div className="p-2 bg-gray-50 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-medium">Сеть</div>
+                    <div className="text-[10px] text-gray-400">strong→weak→fragile→free</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={config.netBlockers.length > 0}
+                    onChange={(e) => toggleNetBlockers(e.target.checked)}
+                  />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  {config.netBlockers.length > 0 && (
-                    <>
-                      {(['strong', 'weak', 'fragile'] as NetState[]).map((s) => (
-                        <button key={s} onClick={() =>
-                          setConfig((p) => ({ ...p, netBlockers: [{ ...p.netBlockers[0], initialState: s }] }))}
-                          className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            config.netBlockers[0]?.initialState === s ? 'bg-amber-700 text-white' : 'bg-gray-200'}`}>
-                          {s[0].toUpperCase()}
-                        </button>
-                      ))}
-                      <input type="number" min={1} max={4} value={config.netBlockers[0]?.count ?? 1}
-                        onChange={(e) => setConfig((p) => ({ ...p, netBlockers: [{ ...p.netBlockers[0], count: parseInt(e.target.value) || 1 }] }))}
-                        className="w-8 text-center border border-gray-300 rounded text-xs p-0.5" />
-                    </>
-                  )}
-                  <input type="checkbox" checked={config.netBlockers.length > 0}
-                    onChange={(e) => setConfig((p) => ({
-                      ...p,
-                      netBlockers: e.target.checked ? [{ wrapsType: p.availableTypes[0], initialState: 'strong', count: 1 }] : [],
-                    }))} />
-                </div>
+                {config.netBlockers.length > 0 && (
+                  <div className="space-y-1.5">
+                    {NET_STATES.map((state) => {
+                      const blocker = config.netBlockers.find((item) => item.initialState === state);
+                      return (
+                        <div key={state} className="grid grid-cols-[84px_1fr_64px] items-center gap-2">
+                          <div className="text-[11px] font-medium text-gray-600">
+                            {state === 'strong' ? 'Прочная' : state === 'weak' ? 'Средняя' : 'Хрупкая'}
+                          </div>
+                          <select
+                            value={blocker?.wrapsType ?? config.availableTypes[0]}
+                            onChange={(e) =>
+                              upsertNetBlocker(state, {
+                                wrapsType: e.target.value as ItemType,
+                                count: blocker?.count ?? 1,
+                              })
+                            }
+                            className="border border-gray-300 rounded px-2 py-1 text-xs"
+                          >
+                            {config.availableTypes.map((type) => (
+                              <option key={type} value={type}>
+                                {ITEM_CONFIGS[type].label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            min={0}
+                            max={99}
+                            value={blocker?.count ?? 0}
+                            onChange={(e) =>
+                              upsertNetBlocker(state, { count: parseInt(e.target.value, 10) || 0 })
+                            }
+                            className="w-full text-center border border-gray-300 rounded text-xs p-1"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Камень */}
-              <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                <div>
-                  <div className="text-xs font-medium">Камень</div>
-                  <div className="text-[10px] text-gray-400">large=3, medium=2, small=1 хит</div>
+              <div className="p-2 bg-gray-50 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-medium">Камень</div>
+                    <div className="text-[10px] text-gray-400">large=3, medium=2, small=1 хит</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={config.stoneBlockers.length > 0}
+                    onChange={(e) => toggleStoneBlockers(e.target.checked)}
+                  />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  {config.stoneBlockers.length > 0 && (
-                    <>
-                      {(['large', 'medium', 'small'] as StoneSize[]).map((s) => (
-                        <button key={s} onClick={() =>
-                          setConfig((p) => ({ ...p, stoneBlockers: [{ ...p.stoneBlockers[0], size: s }] }))}
-                          className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            config.stoneBlockers[0]?.size === s ? 'bg-gray-700 text-white' : 'bg-gray-200'}`}>
-                          {s[0].toUpperCase()}
-                        </button>
-                      ))}
-                      <input type="number" min={1} max={3} value={config.stoneBlockers[0]?.count ?? 1}
-                        onChange={(e) => setConfig((p) => ({ ...p, stoneBlockers: [{ ...p.stoneBlockers[0], count: parseInt(e.target.value) || 1 }] }))}
-                        className="w-8 text-center border border-gray-300 rounded text-xs p-0.5" />
-                    </>
-                  )}
-                  <input type="checkbox" checked={config.stoneBlockers.length > 0}
-                    onChange={(e) => setConfig((p) => ({
-                      ...p,
-                      stoneBlockers: e.target.checked ? [{ size: 'small', count: 1 }] : [],
-                    }))} />
-                </div>
+                {config.stoneBlockers.length > 0 && (
+                  <div className="space-y-1.5">
+                    {STONE_SIZES.map((size) => {
+                      const blocker = config.stoneBlockers.find((item) => item.size === size);
+                      return (
+                        <div key={size} className="grid grid-cols-[84px_64px] justify-between items-center gap-2">
+                          <div className="text-[11px] font-medium text-gray-600">
+                            {size === 'large' ? 'Большой' : size === 'medium' ? 'Средний' : 'Малый'}
+                          </div>
+                          <input
+                            type="number"
+                            min={0}
+                            max={99}
+                            value={blocker?.count ?? 0}
+                            onChange={(e) => upsertStoneBlocker(size, parseInt(e.target.value, 10) || 0)}
+                            className="w-full text-center border border-gray-300 rounded text-xs p-1"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -316,6 +444,18 @@ export default function LevelEditor() {
             onPointerUp={handlers.handlePointerUp}
           />
           <GameHUD onBoosterClick={handleBoosterClick} />
+
+          {status === 'booster_mode' && activeBooster.type && activeBooster.type !== 'blender' && (
+            <ModalBoosterHint boosterType={activeBooster.type} onCancel={cancelBooster} />
+          )}
+
+          {status === 'booster_mode' && activeBooster.type === 'blender' && (
+            <ModalBoosterSelect
+              availableTypes={config.availableTypes}
+              onSelect={handleBlenderSelect}
+              onCancel={cancelBooster}
+            />
+          )}
 
           {(status === 'win' || status === 'lose') && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-40">

@@ -22,8 +22,6 @@ export function isSameBaseType(a: GameItem, b: GameItem): boolean {
 }
 
 export function canAddToChain(chain: GameItem[], candidate: GameItem): boolean {
-  // Предмет в сети не включается в цепочку
-  if (candidate.netState !== null) return false;
   // Камень не участвует в цепочке
   if (candidate.stoneSize !== null) return false;
 

@@ -186,7 +186,7 @@ export default function HomeClient() {
                 if (/^\d*\.?\d*$/.test(val)) {
                   setDraftConfig((c) => ({
                     ...c,
-                    blockerSpawnChance: val === '' ? 0 : parseFloat(val),
+                    blockerSpawnChance: Math.min(1, Math.max(0, val === '' ? 0 : parseFloat(val))),
                   }));
                 }
               }}

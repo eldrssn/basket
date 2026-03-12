@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import Matter from 'matter-js';
 import type { LevelConfig } from '../config/levels';
-import type { GameItem, FieldItemType, ItemType } from './types';
+import type { GameItem, FieldItemType, ItemType, NetState, StoneSize } from './types';
 import { ITEM_CONFIGS } from '../config/items';
 import { STONE_CONFIGS } from '../config/blockers';
 import { BASKET_TOP_Y, getBasketInnerBoundsAtY } from '../lib/basket';
@@ -13,6 +13,19 @@ export function useSpawner(
   engineRef: React.MutableRefObject<Matter.Engine | null>,
   itemsRef: React.MutableRefObject<Map<string, GameItem>>,
 ) {
+  const getSpawnPosition = useCallback(
+    (radius: number, x?: number, y?: number) => {
+      const spawnBounds = getBasketInnerBoundsAtY(BASKET_TOP_Y, SPAWN_PADDING + radius);
+      const spawnWidth = Math.max(0, spawnBounds.right - spawnBounds.left);
+
+      return {
+        x: x ?? spawnBounds.left + Math.random() * spawnWidth,
+        y: y ?? -radius - 10,
+      };
+    },
+    [],
+  );
+
   // Spawn a single random item at the given position (or random X if not specified)
   const spawnItem = useCallback(
     (x?: number, y?: number): GameItem | null => {
@@ -26,12 +39,9 @@ export function useSpawner(
       const fieldType: FieldItemType = isGolden ? `golden_${selectedType}` : selectedType;
 
       const cfg = ITEM_CONFIGS[selectedType];
-      const spawnBounds = getBasketInnerBoundsAtY(BASKET_TOP_Y, SPAWN_PADDING + cfg.radius);
-      const spawnWidth = Math.max(0, spawnBounds.right - spawnBounds.left);
-      const spawnX = x ?? spawnBounds.left + Math.random() * spawnWidth;
-      const spawnY = y ?? -cfg.radius - 10;
+      const spawnPoint = getSpawnPosition(cfg.radius, x, y);
 
-      const body = Matter.Bodies.circle(spawnX, spawnY, cfg.radius, {
+      const body = Matter.Bodies.circle(spawnPoint.x, spawnPoint.y, cfg.radius, {
         restitution: cfg.restitution,
         friction: cfg.friction,
         frictionAir: cfg.frictionAir,
@@ -54,7 +64,39 @@ export function useSpawner(
       itemsRef.current.set(item.id, item);
       return item;
     },
-    [levelConfig, engineRef, itemsRef],
+    [engineRef, getSpawnPosition, itemsRef, levelConfig],
+  );
+
+  const spawnNetItem = useCallback(
+    (wrapsType: ItemType, initialState: NetState, x?: number, y?: number): GameItem | null => {
+      if (!engineRef.current) return null;
+
+      const cfg = ITEM_CONFIGS[wrapsType];
+      const spawnPoint = getSpawnPosition(cfg.radius, x, y);
+      const body = Matter.Bodies.circle(spawnPoint.x, spawnPoint.y, cfg.radius, {
+        restitution: cfg.restitution,
+        friction: cfg.friction,
+        frictionAir: cfg.frictionAir,
+        mass: cfg.mass,
+        label: 'item',
+      });
+
+      const item: GameItem = {
+        id: String(body.id),
+        body,
+        type: wrapsType,
+        netState: initialState,
+        stoneSize: null,
+        stoneHitsLeft: 0,
+        isGolden: false,
+        isSelected: false,
+      };
+
+      Matter.World.add(engineRef.current.world, body);
+      itemsRef.current.set(item.id, item);
+      return item;
+    },
+    [engineRef, getSpawnPosition, itemsRef],
   );
 
   // Spawn initial items to fill the basket at game start
@@ -73,24 +115,13 @@ export function useSpawner(
     [levelConfig, spawnItem],
   );
 
-  // Respawn exactly `count` items after a match (they fall from above)
-  const respawnAfterMatch = useCallback(
-    (count: number) => {
-      for (let i = 0; i < count; i++) {
-        setTimeout(() => {
-          spawnItem();
-        }, i * 120);
-      }
-    },
-    [spawnItem],
-  );
-
   // Spawn a stone body
   const spawnStone = useCallback(
-    (size: import('./types').StoneSize, x: number, y: number) => {
+    (size: StoneSize, x?: number, y?: number) => {
       if (!engineRef.current) return;
       const stoneCfg = STONE_CONFIGS[size];
-      const body = Matter.Bodies.circle(x, y, stoneCfg.radius, {
+      const spawnPoint = getSpawnPosition(stoneCfg.radius, x, y);
+      const body = Matter.Bodies.circle(spawnPoint.x, spawnPoint.y, stoneCfg.radius, {
         mass: stoneCfg.mass,
         friction: 0.8,
         restitution: 0.1,
@@ -110,10 +141,70 @@ export function useSpawner(
       Matter.World.add(engineRef.current.world, body);
       itemsRef.current.set(item.id, item);
     },
-    [engineRef, itemsRef],
+    [engineRef, getSpawnPosition, itemsRef],
+  );
+
+  // Respawn exactly `count` items after a match (they fall from above)
+  const respawnAfterMatch = useCallback(
+    (count: number) => {
+      for (let i = 0; i < count; i++) {
+        setTimeout(() => {
+          const blockerSpawnChance = clampProbability(levelConfig.blockerSpawnChance);
+          const shouldSpawnBlocker = Math.random() < blockerSpawnChance;
+
+          if (shouldSpawnBlocker) {
+            const blockerOptions: Array<
+              | { kind: 'net'; wrapsType: ItemType; initialState: NetState }
+              | { kind: 'stone'; size: StoneSize }
+            > = [];
+
+            for (const blocker of levelConfig.netBlockers) {
+              blockerOptions.push({
+                kind: 'net',
+                wrapsType: blocker.wrapsType,
+                initialState: blocker.initialState,
+              });
+            }
+
+            for (const blocker of levelConfig.stoneBlockers) {
+              blockerOptions.push({
+                kind: 'stone',
+                size: blocker.size,
+              });
+            }
+
+            if (blockerOptions.length > 0) {
+              const selected = blockerOptions[Math.floor(Math.random() * blockerOptions.length)];
+              if (selected.kind === 'net') {
+                spawnNetItem(selected.wrapsType, selected.initialState);
+                return;
+              }
+
+              spawnStone(selected.size);
+              return;
+            }
+          }
+
+          spawnItem();
+        }, i * 120);
+      }
+    },
+    [
+      levelConfig.blockerSpawnChance,
+      levelConfig.netBlockers,
+      levelConfig.stoneBlockers,
+      spawnItem,
+      spawnNetItem,
+      spawnStone,
+    ],
   );
 
   return { spawnItem, spawnInitialItems, respawnAfterMatch, spawnStone };
+}
+
+function clampProbability(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
 }
 
 function weightedRandom(

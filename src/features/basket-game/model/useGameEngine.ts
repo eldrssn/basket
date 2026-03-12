@@ -7,6 +7,7 @@ import { STONE_CONFIGS, NET_PROGRESSION } from '../config/blockers';
 import { initPhysicsEngine, createBasketBodies } from '../lib/physics';
 import { calculateChainScore, calculateHarvestProgress } from '../lib/scoreCalc';
 import { spawnMatchEffect, updateParticles } from '../lib/effectsCanvas';
+import { isNeighbor } from '../lib/matchUtils';
 import { useGameStore } from './useGameStore';
 import { useSpawner } from './useSpawner';
 import { useBoosterLogic } from './useBoosterLogic';
@@ -189,44 +190,50 @@ export function useGameEngine(levelConfig: LevelConfig) {
     (chain: GameItem[]) => {
       if (!engineRef.current) return;
 
+      const removableItems = chain.filter((item) => item.netState === null);
       const store = useGameStore.getState();
-      const score = calculateChainScore(chain);
+      const score = calculateChainScore(removableItems);
       const progressPct = calculateHarvestProgress(score, store.harvestGoal);
 
-      // Remove chain items
-      for (const item of chain) {
+      // Remove only free items. Netted items remain on the field and only lose one net state.
+      for (const item of removableItems) {
         Matter.World.remove(engineRef.current.world, item.body);
         itemsRef.current.delete(item.id);
       }
 
-      spawnMatchEffect(chain);
+      if (removableItems.length > 0) {
+        spawnMatchEffect(removableItems);
+      }
 
-      // Degrade nets and stones near chain
+      // Each blocker can be affected only once per completed combination.
+      const affectedBlockerIds = new Set<string>();
       for (const chainItem of chain) {
-        const cr = chainItem.body.circleRadius ?? 0;
         for (const mapItem of itemsRef.current.values()) {
-          const mr = mapItem.body.circleRadius ?? 0;
-          const dx = chainItem.body.position.x - mapItem.body.position.x;
-          const dy = chainItem.body.position.y - mapItem.body.position.y;
-          const inRange = Math.sqrt(dx * dx + dy * dy) <= cr + mr + 35;
-          if (!inRange) continue;
+          if (mapItem.netState === null && mapItem.stoneSize === null) continue;
+          if (!isNeighbor(chainItem, mapItem)) continue;
+          affectedBlockerIds.add(mapItem.id);
+        }
+      }
 
-          if (mapItem.netState !== null) {
-            mapItem.netState = NET_PROGRESSION[mapItem.netState];
-          }
+      for (const blockerId of affectedBlockerIds) {
+        const blocker = itemsRef.current.get(blockerId);
+        if (!blocker) continue;
 
-          if (mapItem.stoneSize !== null) {
-            mapItem.stoneHitsLeft -= 1;
-            if (mapItem.stoneHitsLeft <= 0) {
-              Matter.World.remove(engineRef.current!.world, mapItem.body);
-              itemsRef.current.delete(mapItem.id);
-            }
+        if (blocker.netState !== null) {
+          blocker.netState = NET_PROGRESSION[blocker.netState];
+        }
+
+        if (blocker.stoneSize !== null) {
+          blocker.stoneHitsLeft -= 1;
+          if (blocker.stoneHitsLeft <= 0) {
+            Matter.World.remove(engineRef.current.world, blocker.body);
+            itemsRef.current.delete(blocker.id);
           }
         }
       }
 
-      // Respawn exactly the number of removed items
-      respawnAfterMatch(chain.length);
+      // Respawn exactly the number of collected free items.
+      respawnAfterMatch(removableItems.length);
 
       useGameStore.getState().addScore(score);
       useGameStore.getState().addProgress(progressPct);
