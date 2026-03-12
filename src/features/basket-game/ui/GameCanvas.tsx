@@ -220,8 +220,13 @@ function renderItem(
   } else {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fillStyle = item.isGolden ? '#FFD600' : (cfg?.color ?? '#888');
+    ctx.fillStyle = cfg?.color ?? '#888';
     ctx.fill();
+    if (item.isGolden) {
+      ctx.lineWidth = Math.max(3, r * 0.18);
+      ctx.strokeStyle = '#FFD600';
+      ctx.stroke();
+    }
     // Буква-подсказка
     ctx.fillStyle = '#fff';
     ctx.font = `bold ${Math.floor(r * 0.75)}px Arial`;
