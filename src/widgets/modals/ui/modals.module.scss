@@ -79,16 +79,24 @@
   cursor: pointer;
   background: #16a34a;
   color: #fff;
-  transition: background 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    transform 0.1s;
 
-  &:hover { background: #15803d; }
-  &:active { transform: scale(0.97); }
+  &:hover {
+    background: #15803d;
+  }
+  &:active {
+    transform: scale(0.97);
+  }
 }
 
 .btnPrimaryRed {
   @extend .btnPrimary;
   background: #ef4444;
-  &:hover { background: #dc2626; }
+  &:hover {
+    background: #dc2626;
+  }
 }
 
 .btnSecondary {
@@ -101,10 +109,16 @@
   cursor: pointer;
   background: #f3f4f6;
   color: #4b5563;
-  transition: background 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    transform 0.1s;
 
-  &:hover { background: #e5e7eb; }
-  &:active { transform: scale(0.97); }
+  &:hover {
+    background: #e5e7eb;
+  }
+  &:active {
+    transform: scale(0.97);
+  }
 }
 
 // ── Прогресс-бар (ModalLose) ──────────────────────────────────────────
@@ -153,42 +167,61 @@
 
 .hintPanel {
   width: 100%;
+  min-height: calc(80px + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(6px);
   border-top: 1px solid #e5e7eb;
-  padding: 20px 20px calc(env(safe-area-inset-bottom) + 16px);
+  padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px);
   pointer-events: auto;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  max-height: 80px;
 }
 
 .hintHeader {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .hintEmoji {
-  font-size: 2.25rem;
+  font-size: 1.75rem;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .hintLabel {
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: #1f2937;
+  line-height: 1.1;
 }
 
 .hintDesc {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: #6b7280;
-  margin-top: 4px;
+  margin-top: 2px;
+  line-height: 1.25;
 }
 
 .hintNote {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #9ca3af;
-  text-align: center;
-  margin-bottom: 12px;
+  display: inline;
+  margin: 0 6px;
+}
+
+.hintPanel .btnSecondary {
+  width: 88px;
+  height: 50px;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  align-self: stretch;
 }
 
 // ── ModalBoosterSelect ───────────────────────────────────────────────
@@ -243,10 +276,16 @@
   border-radius: 10px;
   background: transparent;
   cursor: pointer;
-  transition: background 0.1s, transform 0.1s;
+  transition:
+    background 0.1s,
+    transform 0.1s;
 
-  &:hover { background: #f9fafb; }
-  &:active { transform: scale(0.88); }
+  &:hover {
+    background: #f9fafb;
+  }
+  &:active {
+    transform: scale(0.88);
+  }
 }
 
 .itemCircle {

@@ -15,22 +15,29 @@ const EMOJI: Record<BoosterType, string> = {
   blender: '🌀',
 };
 
-export default function ModalBoosterHint({ boosterType, onCancel }: ModalBoosterHintProps) {
+export default function ModalBoosterHint({
+  boosterType,
+  onCancel,
+}: ModalBoosterHintProps) {
   const cfg = BOOSTER_CONFIGS[boosterType];
 
   return (
     <div className={styles.hintOverlay}>
       <div className={styles.hintPanel}>
         <div className={styles.hintHeader}>
-          <div className={styles.hintEmoji}>{EMOJI[boosterType]}</div>
           <div>
             <div className={styles.hintLabel}>{cfg.label}</div>
-            <div className={styles.hintDesc}>{cfg.description}</div>
+            <div className={styles.hintDesc}>
+              {cfg.description}
+              <div className={styles.hintNote}>
+                Тапни по нужному объекту на поле
+              </div>
+            </div>
           </div>
         </div>
-        <div className={styles.hintNote}>Тапни по нужному объекту на поле</div>
+
         <button className={styles.btnSecondary} onClick={onCancel}>
-          Отмена — бустер не тратится
+          Отмена
         </button>
       </div>
     </div>
