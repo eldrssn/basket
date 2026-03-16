@@ -35,39 +35,39 @@ export interface LevelConfig {
   id: number;
   name: string;
 
-  // Цель уровня: сколько очков нужно набрать для 100% прогресса
+  // Level goal: points needed for 100% progress
   harvestGoalPoints: number;
 
-  // Ограничение: только ходы (не время)
+  // Constraint: moves only (not time)
   movesLimit: number;
 
-  // Общее количество предметов в корзинке
+  // Total number of items in the basket
   totalItems: number;
 
-  // Предметы
+  // Items
   availableTypes: ItemType[];
   spawnWeights: Partial<Record<ItemType, number>>;
   goldenSpawnChance: number; // 0..1
 
-  // Предустановленные объекты (уже в корзинке на старте)
+  // Preset objects (already in basket at start)
   presetItems: PresetItem[];
 
-  // Блокеры на старте
+  // Blockers at start
   netBlockers: NetBlockerConfig[];
   stoneBlockers: StoneBlockerConfig[];
 
-  // Вероятность спавна блокеров при досыпке (0..1)
+  // Blocker spawn probability on refill (0..1)
   blockerSpawnChance: number;
 
-  // Бустеры
+  // Boosters
   availableBoosters: BoosterType[];
   startBoosters: Partial<BoosterInventory>;
 
-  // Зона карты
+  // Map zone
   zone: MapZone;
 }
 
-// ─── ГЕНЕРАТОР УРОВНЕЙ ───────────────────────────────────────────────
+// ─── LEVEL GENERATOR ────────────────────────────────────────────────
 
 export function generateLevel(id: number): LevelConfig {
   const isEasy = id <= 10;
@@ -130,7 +130,7 @@ export function generateLevel(id: number): LevelConfig {
 
   return {
     id,
-    name: `Уровень ${id}`,
+    name: `Level ${id}`,
     harvestGoalPoints,
     movesLimit,
     totalItems,

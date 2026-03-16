@@ -35,7 +35,7 @@ export default function GameHUD({ onBoosterClick }: GameHUDProps) {
 
   return (
     <>
-      {/* ── Верхняя панель ── */}
+      {/* ── Top panel ── */}
       <div className={styles.topPanel}>
         <div className={styles.stats}>
           <div
@@ -63,7 +63,7 @@ export default function GameHUD({ onBoosterClick }: GameHUDProps) {
         </div>
       </div>
 
-      {/* ── Нижняя панель: 3 бустера ── */}
+      {/* ── Bottom panel: 3 boosters ── */}
       <div className={styles.bottomPanel}>
         {BOOSTER_ORDER.map((type) => {
           const count = boosters[type];

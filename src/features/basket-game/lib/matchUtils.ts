@@ -1,7 +1,5 @@
 import type { GameItem } from '../model/types';
-
-// Порог: дополнительные px сверх суммы радиусов для признания соседства
-const NEIGHBOR_THRESHOLD_EXTRA_PX = 35;
+import { NEIGHBOR_THRESHOLD_EXTRA_PX } from '../config/constants';
 
 export function isNeighbor(a: GameItem, b: GameItem): boolean {
   const dx = a.body.position.x - b.body.position.x;
@@ -14,7 +12,7 @@ export function isNeighbor(a: GameItem, b: GameItem): boolean {
   return dist <= threshold;
 }
 
-// Золотой томат матчится с обычными томатами и наоборот
+// Golden tomato matches with regular tomatoes and vice versa
 export function isSameBaseType(a: GameItem, b: GameItem): boolean {
   const baseA = a.type.startsWith('golden_') ? a.type.slice(7) : a.type;
   const baseB = b.type.startsWith('golden_') ? b.type.slice(7) : b.type;
@@ -22,7 +20,7 @@ export function isSameBaseType(a: GameItem, b: GameItem): boolean {
 }
 
 export function canAddToChain(chain: GameItem[], candidate: GameItem): boolean {
-  // Камень не участвует в цепочке
+  // Stones cannot be part of a chain
   if (candidate.stoneSize !== null) return false;
 
   if (chain.length === 0) return true;

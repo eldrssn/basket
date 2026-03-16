@@ -1,8 +1,8 @@
 import type { NetState, StoneSize } from '../model/types';
 
-// ─── СЕТЬ ───────────────────────────────────────────────────────────
-// GDD: обвязывает предмет. Деградирует за 1 матч рядом: strong → weak → fragile → уничтожена.
-// Предмет в сети не участвует в цепочке. При уничтожении сети — предмет становится свободным.
+// ─── NET ────────────────────────────────────────────────────────────
+// GDD: wraps an item. Degrades by 1 step per adjacent match: strong → weak → fragile → destroyed.
+// A netted item cannot participate in chains. When the net is destroyed the item becomes free.
 
 export interface NetConfig {
   state: NetState;
@@ -29,16 +29,16 @@ export const NET_CONFIGS: Record<NetState, NetConfig> = {
   },
 };
 
-// null = сеть уничтожена, предмет свободен
+// null = net destroyed, item is free
 export const NET_PROGRESSION: Record<NetState, NetState | null> = {
   strong: 'weak',
   weak: 'fragile',
   fragile: null,
 };
 
-// ─── КАМЕНЬ ─────────────────────────────────────────────────────────
-// GDD: не участвует в цепочке. Уничтожается матчами рядом или бустером Шампур.
-// large=3 матча рядом, medium=2, small=1
+// ─── STONE ──────────────────────────────────────────────────────────
+// GDD: cannot participate in chains. Destroyed by adjacent matches or Skewer booster.
+// large = 3 adjacent matches, medium = 2, small = 1
 
 export interface StoneConfig {
   size: StoneSize;

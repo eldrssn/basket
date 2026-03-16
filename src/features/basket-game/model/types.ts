@@ -1,6 +1,6 @@
 import type { Body } from 'matter-js';
 
-// ─── ПРЕДМЕТЫ ───────────────────────────────────────────────────────
+// ─── ITEMS ──────────────────────────────────────────────────────────
 
 export type ItemType =
   | 'tomato'
@@ -17,12 +17,12 @@ export type ItemType =
 export type GoldenItemType = `golden_${ItemType}`;
 export type FieldItemType = ItemType | GoldenItemType;
 
-// ─── БЛОКЕРЫ ────────────────────────────────────────────────────────
+// ─── BLOCKERS ───────────────────────────────────────────────────────
 
 export type NetState = 'strong' | 'weak' | 'fragile';
 export type StoneSize = 'large' | 'medium' | 'small';
 
-// ─── ФИЗИЧЕСКИЕ ТЕЛА ────────────────────────────────────────────────
+// ─── PHYSICS BODIES ─────────────────────────────────────────────────
 
 export interface GameItem {
   id: string;
@@ -35,7 +35,7 @@ export interface GameItem {
   isSelected: boolean;
 }
 
-// ─── БУСТЕРЫ ────────────────────────────────────────────────────────
+// ─── BOOSTERS ───────────────────────────────────────────────────────
 
 export type BoosterType = 'watering' | 'skewer' | 'blender';
 
@@ -51,7 +51,7 @@ export type ActiveBoosterState =
   | { type: 'skewer'; targetId: string | null }
   | { type: 'blender'; targetId: string | null };
 
-// ─── ИГРОВОЙ СТЕЙТ ──────────────────────────────────────────────────
+// ─── GAME STATE ─────────────────────────────────────────────────────
 
 export type GameStatus =
   | 'idle'
@@ -72,7 +72,7 @@ export interface GameState {
   boosters: BoosterInventory;
 }
 
-// ─── ЧАСТИЦЫ ────────────────────────────────────────────────────────
+// ─── PARTICLES ──────────────────────────────────────────────────────
 
 export type ParticleType = 'chunk' | 'juice' | 'star';
 

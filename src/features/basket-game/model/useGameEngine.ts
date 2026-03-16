@@ -6,13 +6,15 @@ import { ITEM_CONFIGS } from '../config/items';
 import { STONE_CONFIGS, NET_PROGRESSION } from '../config/blockers';
 import { initPhysicsEngine, createBasketBodies } from '../lib/physics';
 import { calculateChainScore, calculateHarvestProgress } from '../lib/scoreCalc';
-import { spawnMatchEffect, updateParticles } from '../lib/effectsCanvas';
+import { spawnMatchEffect, updateParticles, getAliveParticleCount } from '../lib/effectsCanvas';
 import { isNeighbor } from '../lib/matchUtils';
+import { markPhysicsStart, markPhysicsEnd, updateDebugCounts, isDebugEnabled } from '../lib/debugStats';
 import { useGameStore } from './useGameStore';
 import { useSpawner } from './useSpawner';
 import { useBoosterLogic } from './useBoosterLogic';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/constants';
 import { BASKET_BOTTOM_Y, BASKET_TOP_Y, getBasketInnerBoundsAtY } from '../lib/basket';
+import { gameEvents } from '../lib/eventBus';
 
 export function useGameEngine(levelConfig: LevelConfig) {
   const itemsRef = useRef<Map<string, GameItem>>(new Map());
@@ -38,8 +40,14 @@ export function useGameEngine(levelConfig: LevelConfig) {
     if (status !== 'playing' && status !== 'booster_mode') return;
     if (!engineRef.current) return;
 
+    markPhysicsStart();
     Matter.Engine.update(engineRef.current, 1000 / 60);
     updateParticles();
+    markPhysicsEnd();
+
+    if (isDebugEnabled()) {
+      updateDebugCounts(itemsRef.current.size, getAliveParticleCount());
+    }
 
     rafRef.current = requestAnimationFrame(gameLoop);
   }, []);
@@ -240,11 +248,25 @@ export function useGameEngine(levelConfig: LevelConfig) {
       useGameStore.getState().decrementMoves();
       useGameStore.getState().setChain([]);
 
+      // Emit domain event
+      gameEvents.emit('chain:destroyed', {
+        removedIds: removableItems.map((i) => i.id),
+        count: removableItems.length,
+        score,
+      });
+
+      for (const blockerId of affectedBlockerIds) {
+        const destroyed = !itemsRef.current.has(blockerId);
+        gameEvents.emit('blocker:hit', { blockerId, destroyed });
+      }
+
       const next = useGameStore.getState();
+      const prevStatus = 'playing' as GameStatus;
       const newStatus: GameStatus =
         next.harvestProgress >= 100 ? 'win' : next.movesLeft <= 0 ? 'lose' : 'playing';
       if (newStatus !== 'playing') {
         useGameStore.getState().setStatus(newStatus);
+        gameEvents.emit('game:statusChanged', { from: prevStatus, to: newStatus });
       }
     },
     [respawnAfterMatch],
@@ -255,6 +277,7 @@ export function useGameEngine(levelConfig: LevelConfig) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (engineRef.current) Matter.Engine.clear(engineRef.current);
+      gameEvents.clear();
     };
   }, []);
 

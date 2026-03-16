@@ -1,11 +1,17 @@
 import type { GameItem, EffectParticle } from '../model/types';
 import { ITEM_CONFIGS } from '../config/items';
 import type { ItemType } from '../model/types';
+import {
+  MAX_PARTICLES,
+  PARTICLE_GRAVITY,
+  PARTICLE_VX_DAMPING,
+  CHUNK_COUNT, CHUNK_SPEED_MIN, CHUNK_SPEED_RANGE, CHUNK_SIZE_MIN, CHUNK_SIZE_RANGE, CHUNK_LIFETIME,
+  JUICE_COUNT, JUICE_SPEED_MIN, JUICE_SPEED_RANGE, JUICE_SIZE_MIN, JUICE_SIZE_RANGE, JUICE_LIFETIME,
+  STAR_COUNT, STAR_SPEED, STAR_SIZE, STAR_LIFETIME,
+} from '../config/constants';
 
-// ─── ОБЪЕКТНЫЙ ПУЛ ЧАСТИЦ ───────────────────────────────────────────
-// Фиксированный массив — никаких new объектов в hot path каждый кадр.
-
-const MAX_PARTICLES = 300;
+// ─── PARTICLE OBJECT POOL ────────────────────────────────────────────
+// Fixed-size array — no allocations in the hot path each frame.
 
 const pool: EffectParticle[] = Array.from({ length: MAX_PARTICLES }, (_, i) => ({
   id: `p${i}`,
@@ -45,7 +51,7 @@ function emit(
   slot.age = 0;
 }
 
-// ─── ПУБЛИЧНЫЙ API ──────────────────────────────────────────────────
+// ─── PUBLIC API ──────────────────────────────────────────────────────
 
 export function spawnMatchEffect(chain: GameItem[]): void {
   for (const item of chain) {
@@ -55,49 +61,58 @@ export function spawnMatchEffect(chain: GameItem[]): void {
     ) as ItemType;
     const color = ITEM_CONFIGS[baseType]?.color ?? '#fff';
 
-    for (let i = 0; i < 5; i++) {
-      const angle = ((Math.PI * 2) / 5) * i + Math.random() * 0.5;
-      const speed = 3 + Math.random() * 4;
+    for (let i = 0; i < CHUNK_COUNT; i++) {
+      const angle = ((Math.PI * 2) / CHUNK_COUNT) * i + Math.random() * 0.5;
+      const speed = CHUNK_SPEED_MIN + Math.random() * CHUNK_SPEED_RANGE;
       emit(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed - 3,
-        color, 8 + Math.random() * 8, 'chunk', 40);
+        color, CHUNK_SIZE_MIN + Math.random() * CHUNK_SIZE_RANGE, 'chunk', CHUNK_LIFETIME);
     }
 
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < JUICE_COUNT; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 1 + Math.random() * 5;
+      const speed = JUICE_SPEED_MIN + Math.random() * JUICE_SPEED_RANGE;
       emit(
         x + (Math.random() - 0.5) * 20,
         y + (Math.random() - 0.5) * 20,
         Math.cos(angle) * speed, Math.sin(angle) * speed - 2,
-        color, 3 + Math.random() * 4, 'juice', 30,
+        color, JUICE_SIZE_MIN + Math.random() * JUICE_SIZE_RANGE, 'juice', JUICE_LIFETIME,
       );
     }
 
     if (item.isGolden) {
-      for (let i = 0; i < 8; i++) {
-        const angle = ((Math.PI * 2) / 8) * i;
-        emit(x, y, Math.cos(angle) * 5, Math.sin(angle) * 5 - 4,
-          '#FFD600', 10, 'star', 50);
+      for (let i = 0; i < STAR_COUNT; i++) {
+        const angle = ((Math.PI * 2) / STAR_COUNT) * i;
+        emit(x, y, Math.cos(angle) * STAR_SPEED, Math.sin(angle) * STAR_SPEED - 4,
+          '#FFD600', STAR_SIZE, 'star', STAR_LIFETIME);
       }
     }
   }
 }
 
-// Вызывается каждый кадр из физического RAF
+// Called every frame from the physics RAF
 export function updateParticles(): void {
   for (let i = 0; i < MAX_PARTICLES; i++) {
     const p = pool[i];
     if (p.age >= p.lifetime) continue;
     p.x += p.vx;
     p.y += p.vy;
-    p.vy += 0.25;
-    p.vx *= 0.96;
+    p.vy += PARTICLE_GRAVITY;
+    p.vx *= PARTICLE_VX_DAMPING;
     p.alpha = 1 - p.age / p.lifetime;
     p.age++;
   }
 }
 
-// Для рендера — перебираем пул, рендерим только живые (age < lifetime)
+// Returns alive particle count for debug stats
+export function getAliveParticleCount(): number {
+  let count = 0;
+  for (let i = 0; i < MAX_PARTICLES; i++) {
+    if (pool[i].age < pool[i].lifetime) count++;
+  }
+  return count;
+}
+
+// For rendering — iterate pool, render only alive (age < lifetime)
 export function getParticlePool(): ReadonlyArray<EffectParticle> {
   return pool;
 }

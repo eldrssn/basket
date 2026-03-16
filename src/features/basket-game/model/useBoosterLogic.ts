@@ -3,6 +3,8 @@ import Matter from 'matter-js';
 import type { GameItem, BoosterType, ItemType } from './types';
 import { useGameStore } from './useGameStore';
 import { spawnMatchEffect } from '../lib/effectsCanvas';
+import { NEIGHBOR_THRESHOLD_EXTRA_PX } from '../config/constants';
+import { gameEvents } from '../lib/eventBus';
 
 export function useBoosterLogic(
   engineRef: React.MutableRefObject<Matter.Engine | null>,
@@ -24,6 +26,7 @@ export function useBoosterLogic(
   const applyBooster = useCallback(
     (type: BoosterType, arg: string | ItemType) => {
       if (!engineRef.current) return;
+      let removedCount = 0;
 
       switch (type) {
         case 'watering': {
@@ -39,7 +42,7 @@ export function useBoosterLogic(
             const mr = item.body.circleRadius ?? 0;
             const dx = target.body.position.x - item.body.position.x;
             const dy = target.body.position.y - item.body.position.y;
-            if (Math.sqrt(dx * dx + dy * dy) <= cr + mr + 35) {
+            if (Math.sqrt(dx * dx + dy * dy) <= cr + mr + NEIGHBOR_THRESHOLD_EXTRA_PX) {
               item.type = item.isGolden ? `golden_${baseType}` : baseType;
             }
           }
@@ -51,6 +54,7 @@ export function useBoosterLogic(
           if (!target) break;
           Matter.World.remove(engineRef.current.world, target.body);
           itemsRef.current.delete(arg);
+          removedCount = 1;
           respawnAfterMatch(1);
           break;
         }
@@ -70,6 +74,7 @@ export function useBoosterLogic(
             itemsRef.current.delete(item.id);
           }
           spawnMatchEffect(toRemove);
+          removedCount = toRemove.length;
           respawnAfterMatch(toRemove.length);
           break;
         }
@@ -78,6 +83,8 @@ export function useBoosterLogic(
       useGameStore.getState().consumeBooster(type);
       useGameStore.getState().setStatus('playing');
       useGameStore.getState().setActiveBooster({ type: null });
+
+      gameEvents.emit('booster:applied', { type, removedCount });
     },
     [engineRef, itemsRef, respawnAfterMatch],
   );

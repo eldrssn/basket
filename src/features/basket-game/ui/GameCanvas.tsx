@@ -13,6 +13,13 @@ import {
   BASKET_WALL_THICKNESS,
   getBasketOutlinePoints,
 } from '../lib/basket';
+import {
+  markRenderStart,
+  markRenderEnd,
+  renderDebugOverlay,
+  toggleDebug,
+} from '../lib/debugStats';
+import { buildAssetManifest, loadAllAssets } from '../lib/assetLoader';
 
 interface GameCanvasProps {
   itemsRef: React.MutableRefObject<Map<string, GameItem>>;
@@ -31,7 +38,7 @@ export default function GameCanvas({
 }: GameCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // ImageBitmap кеш — быстрее HTMLImageElement при drawImage
+  // ImageBitmap cache — faster than HTMLImageElement for drawImage
   const bitmapCacheRef = useRef<Map<string, ImageBitmap>>(new Map());
   const scaleRef = useRef<number>(1);
   const rafRef = useRef<number>(0);
@@ -40,12 +47,17 @@ export default function GameCanvas({
   const statusRef = useRef(status);
   useEffect(() => { statusRef.current = status; }, [status]);
 
-  // Загрузка спрайтов отключена — используем fallback цветные круги
-  // (раскомментировать когда спрайты будут добавлены в /public/game/)
+  // Load sprites — falls back to colored shapes if assets are missing
+  useEffect(() => {
+    const manifest = buildAssetManifest();
+    loadAllAssets(manifest).then((cache) => {
+      if (cache.size > 0) bitmapCacheRef.current = cache;
+    });
+  }, []);
 
-  // ─── DPR-АДАПТИВНЫЙ CANVAS ──────────────────────────────────────────
-  // Размер canvas подстраивается под контейнер с учётом DPR.
-  // Логическое пространство игры GAME_WIDTH×GAME_HEIGHT масштабируется в CSS-пиксели.
+  // ─── DPR-ADAPTIVE CANVAS ───────────────────────────────────────────
+  // Canvas size adapts to the container accounting for DPR.
+  // Logical game space GAME_WIDTH×GAME_HEIGHT is scaled to CSS pixels.
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
@@ -67,15 +79,16 @@ export default function GameCanvas({
     return () => ro.disconnect();
   }, []);
 
-  // ─── РЕНДЕР-ЦИКЛ ────────────────────────────────────────────────────
-  // Независимый RAF только для рендера.
-  // Физика обновляется в useGameEngine.
-  // Когда игра idle — рендер всё равно работает, показывая корзинку.
+  // ─── RENDER LOOP ───────────────────────────────────────────────────
+  // Independent RAF for rendering only.
+  // Physics updates happen in useGameEngine.
+  // When game is idle the render loop still runs, showing the basket.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const render = () => {
+      markRenderStart();
       const ctx = canvas.getContext('2d');
       if (!ctx) { rafRef.current = requestAnimationFrame(render); return; }
 
@@ -91,12 +104,12 @@ export default function GameCanvas({
 
       renderBasket(ctx);
 
-      // Предметы
+      // Items
       itemsRef.current.forEach((item) => {
         renderItem(ctx, item, bitmapCacheRef.current);
       });
 
-      // Частицы из пула
+      // Particles from pool
       const particles = getParticlePool();
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
@@ -104,17 +117,30 @@ export default function GameCanvas({
         renderParticle(ctx, p);
       }
 
-      // Лиана цепочки
+      // Chain line (liana)
       const chain = chainLineRef.current;
       renderChainLine(ctx, chain);
 
       ctx.restore();
 
+      // Debug overlay (rendered in screen space, after ctx.restore)
+      renderDebugOverlay(ctx);
+      markRenderEnd();
+
       rafRef.current = requestAnimationFrame(render);
     };
 
     rafRef.current = requestAnimationFrame(render);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }
+    };
+    window.addEventListener('keydown', onKey);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      window.removeEventListener('keydown', onKey);
+    };
   }, [itemsRef, chainLineRef]);
 
   // ─── POINTER EVENTS ─────────────────────────────────────────────────
@@ -151,7 +177,7 @@ export default function GameCanvas({
   );
 }
 
-// ─── ФУНКЦИИ РЕНДЕРА ────────────────────────────────────────────────
+// ─── RENDER FUNCTIONS ───────────────────────────────────────────────
 
 function renderBasket(ctx: CanvasRenderingContext2D) {
   const { leftWall, bottomArc, rightWall } = getBasketOutlinePoints();
@@ -206,14 +232,14 @@ function renderItem(
   ctx.translate(position.x, position.y);
   ctx.rotate(angle);
 
-  // Тень для выбранных предметов
+  // Shadow glow for selected items
   if (item.isSelected) {
     ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
     ctx.shadowBlur = 14;
   }
 
-  // Спрайт или fallback-круг
-  const bitmapKey = item.type; // 'golden_tomato' или 'tomato'
+  // Sprite or fallback circle
+  const bitmapKey = item.type;
   const bitmap = cache.get(bitmapKey);
   if (bitmap) {
     ctx.drawImage(bitmap, -r, -r, r * 2, r * 2);
@@ -227,7 +253,7 @@ function renderItem(
       ctx.strokeStyle = '#FFD600';
       ctx.stroke();
     }
-    // Буква-подсказка
+    // Letter hint
     ctx.fillStyle = '#fff';
     ctx.font = `bold ${Math.floor(r * 0.75)}px Arial`;
     ctx.textAlign = 'center';
@@ -237,7 +263,7 @@ function renderItem(
 
   ctx.shadowBlur = 0;
 
-  // Золотое свечение
+  // Golden glow
   if (item.isGolden) {
     const glow = ctx.createRadialGradient(0, 0, r * 0.5, 0, 0, r * 1.6);
     glow.addColorStop(0, 'rgba(255, 214, 0, 0)');
@@ -248,14 +274,14 @@ function renderItem(
     ctx.fill();
   }
 
-  // Накладка сети
+  // Net overlay
   if (item.netState !== null) {
     const netCfg = NET_CONFIGS[item.netState];
     const netBmp = cache.get(`net_${item.netState}`);
     if (netBmp) {
       ctx.drawImage(netBmp, -r - 4, -r - 4, (r + 4) * 2, (r + 4) * 2);
     } else {
-      // Fallback: полупрозрачный прямоугольник-сетка
+      // Fallback: semi-transparent circle outline
       ctx.beginPath();
       ctx.arc(0, 0, r + 3, 0, Math.PI * 2);
       ctx.strokeStyle = netCfg.overlayColor;
@@ -264,7 +290,7 @@ function renderItem(
     }
   }
 
-  // Камень — серый поверх
+  // Stone overlay — gray on top
   if (item.stoneSize !== null) {
     const stoneCfg = STONE_CONFIGS[item.stoneSize];
     const stoneBmp = cache.get(`stone_${item.stoneSize}`);
@@ -275,7 +301,7 @@ function renderItem(
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fillStyle = stoneCfg.color;
       ctx.fill();
-      // Индикатор прочности
+      // Durability indicator
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.font = `bold ${Math.floor(r * 0.6)}px Arial`;
       ctx.textAlign = 'center';

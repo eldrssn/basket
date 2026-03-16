@@ -48,7 +48,7 @@ export function useMatchLogic(
       const hit = hitTest(x, y);
       if (!hit) return;
 
-      // Добавить в цепочку (проверка пересечения лианы)
+      // Add to chain (with liana self-intersection check)
       if (canAddToChain(chain, hit) && !wouldSelfIntersect(chain, hit)) {
         hit.isSelected = true;
         chainRef.current = [...chain, hit];
@@ -59,7 +59,7 @@ export function useMatchLogic(
         return;
       }
 
-      // Отмена последнего шага — drag назад к предыдущему
+      // Undo last step — drag back to previous item
       if (chain.length >= 2 && hit.id === chain[chain.length - 2].id) {
         const removed = chain[chain.length - 1];
         removed.isSelected = false;

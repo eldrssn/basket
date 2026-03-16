@@ -5,8 +5,7 @@ import type { GameItem, FieldItemType, ItemType, NetState, StoneSize } from './t
 import { ITEM_CONFIGS } from '../config/items';
 import { STONE_CONFIGS } from '../config/blockers';
 import { BASKET_TOP_Y, getBasketInnerBoundsAtY } from '../lib/basket';
-
-const SPAWN_PADDING = 40; // extra inset from each wall
+import { SPAWN_PADDING, RESPAWN_STAGGER_MS } from '../config/constants';
 
 export function useSpawner(
   levelConfig: LevelConfig,
@@ -186,7 +185,7 @@ export function useSpawner(
           }
 
           spawnItem();
-        }, i * 120);
+        }, i * RESPAWN_STAGGER_MS);
       }
     },
     [
