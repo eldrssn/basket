@@ -2,8 +2,11 @@
 
 import dynamic from 'next/dynamic';
 
-const HomeClient = dynamic(() => import('./HomeClient'), { ssr: false });
+const LevelEditor = dynamic(
+  () => import('@/widgets/level-editor/ui/LevelEditor'),
+  { ssr: false },
+);
 
 export default function Home() {
-  return <HomeClient />;
+  return <LevelEditor />;
 }
