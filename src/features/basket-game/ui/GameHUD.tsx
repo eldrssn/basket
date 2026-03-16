@@ -58,7 +58,7 @@ export default function GameHUD({ onBoosterClick }: GameHUDProps) {
             />
           </div>
           <span className={styles.progressText}>
-            {Math.floor(progressPct)}%
+            {score} / {harvestGoal}
           </span>
         </div>
       </div>
