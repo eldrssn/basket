@@ -27,9 +27,31 @@ import type {
 const NET_STATES: NetState[] = ['strong', 'weak', 'fragile'];
 const STONE_SIZES: StoneSize[] = ['large', 'medium', 'small'];
 
+const LS_SELECTED_ID = 'level_editor_selected_id';
+const LS_LEVEL_PREFIX = 'level_editor_config_';
+
+function loadSavedConfig(id: number): LevelConfig {
+  try {
+    const raw = localStorage.getItem(`${LS_LEVEL_PREFIX}${id}`);
+    if (raw) return JSON.parse(raw) as LevelConfig;
+  } catch { /* ignore corrupt data */ }
+  return LEVELS.find((l) => l.id === id) ?? LEVELS[0];
+}
+
+function loadSavedId(): number {
+  try {
+    const raw = localStorage.getItem(LS_SELECTED_ID);
+    if (raw) {
+      const id = parseInt(raw, 10);
+      if (id >= 1 && id <= LEVELS.length) return id;
+    }
+  } catch { /* ignore */ }
+  return 1;
+}
+
 export default function LevelEditor() {
-  const [selectedId, setSelectedId] = useState(1);
-  const [config, setConfig] = useState<LevelConfig>(() => LEVELS[0]);
+  const [selectedId, setSelectedId] = useState(() => loadSavedId());
+  const [config, setConfig] = useState<LevelConfig>(() => loadSavedConfig(loadSavedId()));
   const [previewKey, setPreviewKey] = useState(0);
   const [attempts, setAttempts] = useState(100);
 
@@ -44,6 +66,16 @@ export default function LevelEditor() {
 
   const { status, activeBooster } = useGameStore();
   const { chainLineRef, handlers } = useMatchLogic(itemsRef, destroyChain);
+
+  // Persist selected level ID
+  useEffect(() => {
+    localStorage.setItem(LS_SELECTED_ID, String(selectedId));
+  }, [selectedId]);
+
+  // Persist modified config
+  useEffect(() => {
+    localStorage.setItem(`${LS_LEVEL_PREFIX}${config.id}`, JSON.stringify(config));
+  }, [config]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -63,7 +95,7 @@ export default function LevelEditor() {
 
   const handleLevelChange = useCallback((id: number) => {
     setSelectedId(id);
-    setConfig(LEVELS.find((l) => l.id === id) ?? LEVELS[0]);
+    setConfig(loadSavedConfig(id));
   }, []);
 
   const handleAutoGenerate = useCallback(() => {
