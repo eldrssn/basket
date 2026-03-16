@@ -31,3 +31,7 @@
 - Level editor
 - Boosters (Rake implemented, others extensible)
 - Fruit Ninja style effects
+
+## Дополнительная документация
+
+- [Engineering Rules](./docs/engineering-rules.md) — общие правила разработки для игрового runtime, архитектуры и производительности.
