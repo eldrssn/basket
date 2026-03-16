@@ -34,7 +34,9 @@ function loadSavedConfig(id: number): LevelConfig {
   try {
     const raw = localStorage.getItem(`${LS_LEVEL_PREFIX}${id}`);
     if (raw) return JSON.parse(raw) as LevelConfig;
-  } catch { /* ignore corrupt data */ }
+  } catch {
+    /* ignore corrupt data */
+  }
   return LEVELS.find((l) => l.id === id) ?? LEVELS[0];
 }
 
@@ -45,15 +47,18 @@ function loadSavedId(): number {
       const id = parseInt(raw, 10);
       if (id >= 1 && id <= LEVELS.length) return id;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return 1;
 }
 
 export default function LevelEditor() {
   const [selectedId, setSelectedId] = useState(() => loadSavedId());
-  const [config, setConfig] = useState<LevelConfig>(() => loadSavedConfig(loadSavedId()));
+  const [config, setConfig] = useState<LevelConfig>(() =>
+    loadSavedConfig(loadSavedId()),
+  );
   const [previewKey, setPreviewKey] = useState(0);
-  const [attempts, setAttempts] = useState(100);
 
   const {
     itemsRef,
@@ -74,7 +79,10 @@ export default function LevelEditor() {
 
   // Persist modified config
   useEffect(() => {
-    localStorage.setItem(`${LS_LEVEL_PREFIX}${config.id}`, JSON.stringify(config));
+    localStorage.setItem(
+      `${LS_LEVEL_PREFIX}${config.id}`,
+      JSON.stringify(config),
+    );
   }, [config]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -200,6 +208,14 @@ export default function LevelEditor() {
     }));
   }, []);
 
+  const setTotalItems = useCallback((value: string) => {
+    const parsed = parseInt(value, 10);
+    setConfig((prev) => ({
+      ...prev,
+      totalItems: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
+    }));
+  }, []);
+
   const upsertNetBlocker = useCallback(
     (state: NetState, updates: { count?: number; wrapsType?: ItemType }) => {
       setConfig((prev) => {
@@ -310,41 +326,10 @@ export default function LevelEditor() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-5">
-          {/* Попытки */}
-          <div>
-            <div className="text-xs font-semibold text-gray-600 mb-1">
-              Попытки (тест)
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setAttempts((a) => Math.max(1, a - 1))}
-                className="w-7 h-7 bg-gray-100 rounded font-bold text-sm hover:bg-gray-200"
-              >
-                −
-              </button>
-              <input
-                type="number"
-                value={attempts}
-                min={1}
-                max={999}
-                onChange={(e) =>
-                  setAttempts(Math.max(1, parseInt(e.target.value) || 1))
-                }
-                className="w-16 text-center border border-gray-300 rounded p-1 text-sm"
-              />
-              <button
-                onClick={() => setAttempts((a) => Math.min(999, a + 1))}
-                className="w-7 h-7 bg-gray-100 rounded font-bold text-sm hover:bg-gray-200"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
           {/* Ходы */}
           <div>
             <div className="text-xs font-semibold text-gray-600 mb-1">
-              Ходы: <b>{config.movesLimit}</b>
+              Ходы:
             </div>
             <input
               type="number"
@@ -356,10 +341,25 @@ export default function LevelEditor() {
             />
           </div>
 
+          {/* Количество предметов */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-1">
+              Предметов в корзине:
+            </div>
+            <input
+              type="number"
+              min={0}
+              max={999}
+              value={config.totalItems}
+              onChange={(e) => setTotalItems(e.target.value)}
+              className="w-full border border-gray-300 rounded p-2 text-sm"
+            />
+          </div>
+
           {/* Цель */}
           <div>
             <div className="text-xs font-semibold text-gray-600 mb-1">
-              Цель (очков): <b>{config.harvestGoalPoints}</b>
+              Цель (очков):
             </div>
             <input
               type="range"
