@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import Matter from 'matter-js';
 import type { LevelConfig } from '../config/levels';
 import type { GameItem, FieldItemType, ItemType, NetState, StoneSize } from './types';
@@ -12,6 +12,7 @@ export function useSpawner(
   engineRef: React.MutableRefObject<Matter.Engine | null>,
   itemsRef: React.MutableRefObject<Map<string, GameItem>>,
 ) {
+  const initialSpawnTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const getSpawnPosition = useCallback(
     (radius: number, x?: number, y?: number) => {
       const spawnBounds = getBasketInnerBoundsAtY(BASKET_TOP_Y, SPAWN_PADDING + radius);
@@ -103,9 +104,12 @@ export function useSpawner(
   // totalItems = total count from config; presetItems/blockers already placed before this call
   const spawnInitialItems = useCallback(
     (alreadyPlaced: number) => {
+      initialSpawnTimersRef.current.forEach(clearTimeout);
+      initialSpawnTimersRef.current = [];
+
       const remaining = Math.max(0, levelConfig.totalItems - alreadyPlaced);
       for (let i = 0; i < remaining; i++) {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           const cfg = ITEM_CONFIGS[levelConfig.availableTypes[0]];
           const spawnBounds = getBasketInnerBoundsAtY(BASKET_TOP_Y, SPAWN_PADDING + cfg.radius);
           const spawnWidth = Math.max(0, spawnBounds.right - spawnBounds.left) * 0.25;
@@ -114,6 +118,7 @@ export function useSpawner(
           const y = -10 - Math.random() * 300;
           spawnItem(x, y);
         }, i * INITIAL_SPAWN_STAGGER_MS);
+        initialSpawnTimersRef.current.push(timer);
       }
     },
     [levelConfig, spawnItem],

@@ -308,6 +308,13 @@ export default function LevelEditor() {
             >
               ⚡
             </button>
+            <button
+              onClick={() => setPreviewKey((k) => k + 1)}
+              title="Перезапустить"
+              className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm"
+            >
+              ↺
+            </button>
           </div>
           <div className="flex gap-2">
             <button
