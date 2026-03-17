@@ -35,3 +35,4 @@ export const STAR_LIFETIME = 50;
 // Spawner
 export const SPAWN_PADDING = 40;
 export const RESPAWN_STAGGER_MS = 120;
+export const INITIAL_SPAWN_STAGGER_MS = 100;

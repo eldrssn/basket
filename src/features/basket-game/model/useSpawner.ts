@@ -5,7 +5,7 @@ import type { GameItem, FieldItemType, ItemType, NetState, StoneSize } from './t
 import { ITEM_CONFIGS } from '../config/items';
 import { STONE_CONFIGS } from '../config/blockers';
 import { BASKET_TOP_Y, getBasketInnerBoundsAtY } from '../lib/basket';
-import { SPAWN_PADDING, RESPAWN_STAGGER_MS } from '../config/constants';
+import { SPAWN_PADDING, RESPAWN_STAGGER_MS, INITIAL_SPAWN_STAGGER_MS } from '../config/constants';
 
 export function useSpawner(
   levelConfig: LevelConfig,
@@ -15,10 +15,11 @@ export function useSpawner(
   const getSpawnPosition = useCallback(
     (radius: number, x?: number, y?: number) => {
       const spawnBounds = getBasketInnerBoundsAtY(BASKET_TOP_Y, SPAWN_PADDING + radius);
-      const spawnWidth = Math.max(0, spawnBounds.right - spawnBounds.left);
+      const spawnWidth = Math.max(0, spawnBounds.right - spawnBounds.left) * 0.25;
+      const spawnCenter = (spawnBounds.left + spawnBounds.right) / 2;
 
       return {
-        x: x ?? spawnBounds.left + Math.random() * spawnWidth,
+        x: x ?? spawnCenter - spawnWidth / 2 + Math.random() * spawnWidth,
         y: y ?? -radius - 10,
       };
     },
@@ -104,11 +105,15 @@ export function useSpawner(
     (alreadyPlaced: number) => {
       const remaining = Math.max(0, levelConfig.totalItems - alreadyPlaced);
       for (let i = 0; i < remaining; i++) {
-        const cfg = ITEM_CONFIGS[levelConfig.availableTypes[0]];
-        const spawnBounds = getBasketInnerBoundsAtY(BASKET_TOP_Y, SPAWN_PADDING + cfg.radius);
-        const x = spawnBounds.left + Math.random() * Math.max(0, spawnBounds.right - spawnBounds.left);
-        const y = -10 - Math.random() * 300;
-        spawnItem(x, y);
+        setTimeout(() => {
+          const cfg = ITEM_CONFIGS[levelConfig.availableTypes[0]];
+          const spawnBounds = getBasketInnerBoundsAtY(BASKET_TOP_Y, SPAWN_PADDING + cfg.radius);
+          const spawnWidth = Math.max(0, spawnBounds.right - spawnBounds.left) * 0.25;
+          const spawnCenter = (spawnBounds.left + spawnBounds.right) / 2;
+          const x = spawnCenter - spawnWidth / 2 + Math.random() * spawnWidth;
+          const y = -10 - Math.random() * 300;
+          spawnItem(x, y);
+        }, i * INITIAL_SPAWN_STAGGER_MS);
       }
     },
     [levelConfig, spawnItem],
