@@ -40,9 +40,10 @@ export function useSpawner(
       const fieldType: FieldItemType = isGolden ? `golden_${selectedType}` : selectedType;
 
       const cfg = ITEM_CONFIGS[selectedType];
-      const spawnPoint = getSpawnPosition(cfg.radius, x, y);
+      const radius = cfg.radius * (levelConfig.itemScale ?? 1.0);
+      const spawnPoint = getSpawnPosition(radius, x, y);
 
-      const body = Matter.Bodies.circle(spawnPoint.x, spawnPoint.y, cfg.radius, {
+      const body = Matter.Bodies.circle(spawnPoint.x, spawnPoint.y, radius, {
         restitution: cfg.restitution,
         friction: cfg.friction,
         frictionAir: cfg.frictionAir,
@@ -73,8 +74,9 @@ export function useSpawner(
       if (!engineRef.current) return null;
 
       const cfg = ITEM_CONFIGS[wrapsType];
-      const spawnPoint = getSpawnPosition(cfg.radius, x, y);
-      const body = Matter.Bodies.circle(spawnPoint.x, spawnPoint.y, cfg.radius, {
+      const radius = cfg.radius * (levelConfig.itemScale ?? 1.0);
+      const spawnPoint = getSpawnPosition(radius, x, y);
+      const body = Matter.Bodies.circle(spawnPoint.x, spawnPoint.y, radius, {
         restitution: cfg.restitution,
         friction: cfg.friction,
         frictionAir: cfg.frictionAir,

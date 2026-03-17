@@ -32,6 +32,9 @@ export const STAR_SPEED = 5;
 export const STAR_SIZE = 10;
 export const STAR_LIFETIME = 50;
 
+// Item scale (1.0 = default minimum size)
+export const ITEM_SCALE = 1.0;
+
 // Spawner
 export const SPAWN_PADDING = 40;
 export const RESPAWN_STAGGER_MS = 120;

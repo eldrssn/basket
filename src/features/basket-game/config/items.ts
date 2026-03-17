@@ -1,4 +1,5 @@
 import type { ItemType } from '../model/types';
+import { ITEM_SCALE } from './constants';
 
 export interface ItemPhysicsConfig {
   type: ItemType;
@@ -13,7 +14,7 @@ export interface ItemPhysicsConfig {
   pointValue: number;
 }
 
-export const ITEM_CONFIGS: Record<ItemType, ItemPhysicsConfig> = {
+const RAW_ITEM_CONFIGS: Record<ItemType, ItemPhysicsConfig> = {
   tomato: {
     type: 'tomato', label: 'Помидор',
     radius: 26, mass: 1.0, restitution: 0.3, friction: 0.6, frictionAir: 0.01,
@@ -65,6 +66,10 @@ export const ITEM_CONFIGS: Record<ItemType, ItemPhysicsConfig> = {
     color: '#283593', spriteSrc: '/game/items/blueberry.png', pointValue: 3,
   },
 };
+
+export const ITEM_CONFIGS = Object.fromEntries(
+  Object.entries(RAW_ITEM_CONFIGS).map(([k, v]) => [k, { ...v, radius: v.radius * ITEM_SCALE }]),
+) as Record<ItemType, ItemPhysicsConfig>;
 
 export const ITEM_LABELS: Record<ItemType, string> = {
   tomato: 'П',

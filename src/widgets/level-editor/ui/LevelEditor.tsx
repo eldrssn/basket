@@ -363,6 +363,26 @@ export default function LevelEditor() {
             />
           </div>
 
+          {/* Размер предметов */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-1">
+              Размер предметов: <b>{(config.itemScale ?? 1.0).toFixed(2)}×</b>
+            </div>
+            <input
+              type="range"
+              min={100}
+              max={250}
+              value={Math.round((config.itemScale ?? 1.0) * 100)}
+              onChange={(e) =>
+                setConfig((p) => ({
+                  ...p,
+                  itemScale: parseInt(e.target.value) / 100,
+                }))
+              }
+              className="w-full"
+            />
+          </div>
+
           {/* Цель */}
           <div>
             <div className="text-xs font-semibold text-gray-600 mb-1">

@@ -63,6 +63,9 @@ export interface LevelConfig {
   availableBoosters: BoosterType[];
   startBoosters: Partial<BoosterInventory>;
 
+  // Item size multiplier (1.0 = default minimum)
+  itemScale: number;
+
   // Map zone
   zone: MapZone;
 }
@@ -143,6 +146,7 @@ export function generateLevel(id: number): LevelConfig {
     blockerSpawnChance: isEasy ? 0 : isMedium ? 0.05 : 0.1,
     availableBoosters: ['watering', 'skewer', 'blender'],
     startBoosters: isEasy && id <= 3 ? { watering: 1, skewer: 1 } : {},
+    itemScale: 1.0,
     zone,
   };
 }

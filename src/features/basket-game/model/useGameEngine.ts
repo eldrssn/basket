@@ -91,21 +91,24 @@ export function useGameEngine(levelConfig: LevelConfig) {
 
     let placedCount = 0;
 
+    const itemScale = levelConfig.itemScale ?? 1.0;
+
     // Preset items
     for (const preset of levelConfig.presetItems) {
       const baseType = preset.type.startsWith('golden_')
         ? (preset.type.slice(7) as import('./types').ItemType)
         : (preset.type as import('./types').ItemType);
       const cfg = ITEM_CONFIGS[baseType];
+      const radius = cfg.radius * itemScale;
       for (let i = 0; i < preset.count; i++) {
         const point = getRandomPointInBasket(
-          cfg.radius,
+          radius,
           GAME_HEIGHT * 0.34,
           GAME_HEIGHT * 0.72,
         );
         const x = point.x;
         const y = point.y;
-        const body = Matter.Bodies.circle(x, y, cfg.radius, {
+        const body = Matter.Bodies.circle(x, y, radius, {
           restitution: cfg.restitution,
           friction: cfg.friction,
           frictionAir: cfg.frictionAir,
@@ -132,15 +135,16 @@ export function useGameEngine(levelConfig: LevelConfig) {
     // Net blockers
     for (const nb of levelConfig.netBlockers) {
       const cfg = ITEM_CONFIGS[nb.wrapsType];
+      const radius = cfg.radius * itemScale;
       for (let i = 0; i < nb.count; i++) {
         const point = getRandomPointInBasket(
-          cfg.radius,
+          radius,
           GAME_HEIGHT * 0.4,
           GAME_HEIGHT * 0.75,
         );
         const x = point.x;
         const y = point.y;
-        const body = Matter.Bodies.circle(x, y, cfg.radius, {
+        const body = Matter.Bodies.circle(x, y, radius, {
           restitution: cfg.restitution,
           friction: cfg.friction,
           frictionAir: cfg.frictionAir,
