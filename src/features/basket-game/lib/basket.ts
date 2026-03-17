@@ -1,7 +1,7 @@
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 
 export const BASKET_CENTER_X = GAME_WIDTH / 2;
-export const BASKET_TOP_Y = GAME_HEIGHT * 0.12;
+export const BASKET_TOP_Y = GAME_HEIGHT * 0.405;
 export const BASKET_INNER_WIDTH = GAME_WIDTH - 64;
 export const BASKET_RADIUS = BASKET_INNER_WIDTH / 2;
 export const BASKET_ARC_CENTER_Y = GAME_HEIGHT * 0.7;
@@ -10,6 +10,9 @@ export const BASKET_BOTTOM_Y = BASKET_ARC_CENTER_Y + BASKET_RADIUS;
 export const BASKET_WALL_THICKNESS = 10;
 export const BASKET_SEGMENTS = 24;
 export const BASKET_RIM_HEIGHT = 40;
+export const BASKET_ARCH_GAP = 170; // ширина дыры в центре арки
+export const BASKET_ARCH_SEGMENTS = 14;
+export const BASKET_FUNNEL_TOP_Y = -200; // верхняя граница вертикальных стенок воронки
 
 export interface BasketPoint {
   x: number;
@@ -55,7 +58,10 @@ export function getBasketSidePoints(
   const outline = getBasketOutlinePoints(segments, inset);
   return {
     left: [...outline.leftWall, ...outline.bottomArc],
-    right: [...outline.bottomArc.slice().reverse(), ...outline.rightWall.slice().reverse()],
+    right: [
+      ...outline.bottomArc.slice().reverse(),
+      ...outline.rightWall.slice().reverse(),
+    ],
   };
 }
 
@@ -88,4 +94,68 @@ export function getBasketOutlinePoints(
   }
 
   return { leftWall, bottomArc, rightWall };
+}
+
+// Арка над корзиной: два дуговых сегмента с дырой в центре.
+// Оба сегмента — часть окружности радиуса BASKET_RADIUS с центром в (BASKET_CENTER_X, BASKET_TOP_Y).
+// Левый сегмент: от левой стенки до левого края дыры.
+// Правый сегмент: от правого края дыры до правой стенки.
+export function getBasketArchPoints(): {
+  left: BasketPoint[];
+  right: BasketPoint[];
+} {
+  const R = BASKET_RADIUS;
+  const cx = BASKET_CENTER_X;
+  const cy = BASKET_TOP_Y;
+  const gapHalf = BASKET_ARCH_GAP / 2;
+
+  // Угол от горизонтали, где x = cx ± gapHalf
+  const gapAngle = Math.acos(gapHalf / R);
+  const leftGapAngle = Math.PI - gapAngle;
+
+  const left: BasketPoint[] = [];
+  const right: BasketPoint[] = [];
+
+  for (let i = 0; i <= BASKET_ARCH_SEGMENTS; i++) {
+    const t = i / BASKET_ARCH_SEGMENTS;
+
+    // Левая дуга: от угла π (левая стенка) до leftGapAngle (левый край дыры)
+    const la = Math.PI - t * (Math.PI - leftGapAngle);
+    left.push({ x: cx + R * Math.cos(la), y: cy - R * Math.sin(la) });
+
+    // Правая дуга: от gapAngle (правый край дыры) до 0 (правая стенка)
+    const ra = gapAngle * (1 - t);
+    right.push({ x: cx + R * Math.cos(ra), y: cy - R * Math.sin(ra) });
+  }
+
+  return { left, right };
+}
+
+// Вертикальные стенки от кончиков арки вверх до верха игрового поля.
+// Ограничивают зону спавна — элементы не могут улететь в стороны.
+export function getBasketArchFunnelPoints(): {
+  left: [BasketPoint, BasketPoint];
+  right: [BasketPoint, BasketPoint];
+} {
+  const R = BASKET_RADIUS;
+  const cx = BASKET_CENTER_X;
+  const cy = BASKET_TOP_Y;
+  const gapHalf = BASKET_ARCH_GAP / 2;
+
+  const gapAngle = Math.acos(gapHalf / R);
+  const leftGapAngle = Math.PI - gapAngle;
+
+  const leftTip: BasketPoint = {
+    x: cx + R * Math.cos(leftGapAngle),
+    y: cy - R * Math.sin(leftGapAngle),
+  };
+  const rightTip: BasketPoint = {
+    x: cx + R * Math.cos(gapAngle),
+    y: cy - R * Math.sin(gapAngle),
+  };
+
+  return {
+    left: [{ x: leftTip.x, y: BASKET_FUNNEL_TOP_Y }, leftTip],
+    right: [rightTip, { x: rightTip.x, y: BASKET_FUNNEL_TOP_Y }],
+  };
 }

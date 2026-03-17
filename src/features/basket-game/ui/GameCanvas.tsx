@@ -12,6 +12,7 @@ import {
   BASKET_RIM_HEIGHT,
   BASKET_WALL_THICKNESS,
   getBasketOutlinePoints,
+  getBasketArchPoints,
 } from '../lib/basket';
 import {
   markRenderStart,
@@ -209,6 +210,22 @@ function renderBasket(ctx: CanvasRenderingContext2D) {
     ctx.lineTo(rightWall[i].x, rightWall[i].y);
   }
   ctx.lineTo(rightTop.x, rightTop.y - BASKET_RIM_HEIGHT);
+  ctx.stroke();
+
+  // Арка
+  const { left: archLeft, right: archRight } = getBasketArchPoints();
+  ctx.beginPath();
+  ctx.moveTo(archLeft[0].x, archLeft[0].y);
+  for (let i = 1; i < archLeft.length; i++) {
+    ctx.lineTo(archLeft[i].x, archLeft[i].y);
+  }
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(archRight[0].x, archRight[0].y);
+  for (let i = 1; i < archRight.length; i++) {
+    ctx.lineTo(archRight[i].x, archRight[i].y);
+  }
   ctx.stroke();
 
   ctx.restore();

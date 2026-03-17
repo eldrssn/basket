@@ -3,6 +3,8 @@ import {
   BASKET_RIM_HEIGHT,
   BASKET_WALL_THICKNESS,
   getBasketOutlinePoints,
+  getBasketArchPoints,
+  getBasketArchFunnelPoints,
 } from './basket';
 
 export interface PhysicsConfig {
@@ -62,6 +64,14 @@ export function createBasketBodies(
   createPathSegments(leftWall);
   createPathSegments(bottomArc);
   createPathSegments(rightWall);
+
+  const { left: archLeft, right: archRight } = getBasketArchPoints();
+  createPathSegments(archLeft);
+  createPathSegments(archRight);
+
+  const { left: funnelLeft, right: funnelRight } = getBasketArchFunnelPoints();
+  createPathSegments(funnelLeft);
+  createPathSegments(funnelRight);
 
   const leftTop = leftWall[0];
   const rightTop = rightWall[0];
